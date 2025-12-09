@@ -49,6 +49,10 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
+        # Initialize profile system
+        self.ensure_profiles_dir()
+        self.current_profile = self.load_current_profile()
+        
         self.config = self.load_config()
         self.history_enabled = self.config.get("history_enabled", False)
         self.history = self.load_history()
@@ -66,6 +70,12 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
         
         # Status bar widgets
+        self.status_profile = QLabel()
+        self.status_profile.setStyleSheet("QLabel { background-color: #4CAF50; color: white; padding: 3px 8px; border-radius: 3px; font-weight: bold; }")
+        self.status_profile.setMinimumWidth(80)
+        self.update_profile_status()
+        self.status.addWidget(self.status_profile)
+        
         self.status_title = QLabel()
         self.status_title.setMinimumWidth(200)
         self.status.addWidget(self.status_title)
@@ -119,6 +129,9 @@ class MainWindow(QMainWindow):
 
         self.history_menu = self.menuBar().addMenu("&History")
         self.update_history_menu()
+
+        self.profile_menu = self.menuBar().addMenu("&Profile")
+        self.update_profile_menu()
 
         help_menu = self.menuBar().addMenu("&Help")
 
@@ -274,11 +287,139 @@ class MainWindow(QMainWindow):
         else:
             self.status_title.setText("Failed to load")
 
+    def ensure_profiles_dir(self):
+        """Ensure profiles directory exists"""
+        if not os.path.exists(PROFILES_DIR):
+            os.makedirs(PROFILES_DIR)
+        
+        # Create default profile directory
+        default_profile_dir = os.path.join(PROFILES_DIR, DEFAULT_PROFILE)
+        if not os.path.exists(default_profile_dir):
+            os.makedirs(default_profile_dir)
+
+    def get_profile_path(self, filename):
+        """Get full path for a file in current profile"""
+        return os.path.join(PROFILES_DIR, self.current_profile, filename)
+
+    def load_current_profile(self):
+        """Load the current active profile name"""
+        try:
+            if os.path.exists(PROFILES_CONFIG_FILE):
+                with open(PROFILES_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data.get("current_profile", DEFAULT_PROFILE)
+        except Exception as e:
+            print(f"Error loading profile config: {e}")
+        return DEFAULT_PROFILE
+
+    def save_current_profile(self):
+        """Save the current active profile name"""
+        try:
+            data = {"current_profile": self.current_profile}
+            with open(PROFILES_CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving profile config: {e}")
+
+    def get_available_profiles(self):
+        """Get list of available profiles"""
+        if not os.path.exists(PROFILES_DIR):
+            return [DEFAULT_PROFILE]
+        
+        profiles = []
+        for item in os.listdir(PROFILES_DIR):
+            item_path = os.path.join(PROFILES_DIR, item)
+            if os.path.isdir(item_path):
+                profiles.append(item)
+        
+        if not profiles:
+            profiles.append(DEFAULT_PROFILE)
+        
+        return sorted(profiles)
+
+    def switch_profile(self, profile_name):
+        """Switch to a different profile"""
+        profile_dir = os.path.join(PROFILES_DIR, profile_name)
+        if not os.path.exists(profile_dir):
+            os.makedirs(profile_dir)
+        
+        self.current_profile = profile_name
+        self.save_current_profile()
+        
+        # Reload data for new profile
+        self.config = self.load_config()
+        self.history_enabled = self.config.get("history_enabled", False)
+        self.history = self.load_history()
+        self.bookmarks = self.load_bookmarks()
+        
+        # Update UI
+        self.update_history_toggle_button()
+        self.update_bookmarks_menu()
+        self.update_history_menu()
+        self.update_profile_menu()
+        self.update_profile_status()
+        
+        QMessageBox.information(self, "Profile Switched", f"Switched to profile: {profile_name}")
+
+    def update_profile_status(self):
+        """Update profile name in status bar"""
+        self.status_profile.setText(f"Profile: {self.current_profile}")
+
+    def update_profile_menu(self):
+        """Update the Profile menu"""
+        self.profile_menu.clear()
+        
+        # Current profile label
+        current_label = QAction(f"Current: {self.current_profile}", self)
+        current_label.setEnabled(False)
+        self.profile_menu.addAction(current_label)
+        
+        self.profile_menu.addSeparator()
+        
+        # New profile action
+        new_profile_action = QAction("New Profile...", self)
+        new_profile_action.triggered.connect(self.create_new_profile)
+        self.profile_menu.addAction(new_profile_action)
+        
+        self.profile_menu.addSeparator()
+        
+        # List available profiles
+        profiles = self.get_available_profiles()
+        for profile in profiles:
+            action = QAction(profile, self)
+            if profile == self.current_profile:
+                action.setEnabled(False)
+            else:
+                action.triggered.connect(lambda checked, p=profile: self.switch_profile(p))
+            self.profile_menu.addAction(action)
+
+    def create_new_profile(self):
+        """Create a new profile"""
+        profile_name, ok = QInputDialog.getText(self, "New Profile", 
+                                                "Profile name:")
+        
+        if ok and profile_name:
+            # Validate profile name
+            if not profile_name.replace("_", "").replace("-", "").isalnum():
+                QMessageBox.warning(self, "Invalid Name", 
+                                   "Profile name can only contain letters, numbers, hyphens, and underscores.")
+                return
+            
+            profile_dir = os.path.join(PROFILES_DIR, profile_name)
+            if os.path.exists(profile_dir):
+                QMessageBox.warning(self, "Profile Exists", 
+                                   f"Profile '{profile_name}' already exists.")
+                return
+            
+            os.makedirs(profile_dir)
+            self.switch_profile(profile_name)
+
     def load_config(self):
         """Load configuration from JSON file"""
+        config_file = self.get_profile_path(CONFIG_FILE)
         try:
-            if os.path.exists(CONFIG_FILE):
-                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
         except Exception as e:
             print(f"Error loading config: {e}")
@@ -286,17 +427,19 @@ class MainWindow(QMainWindow):
 
     def save_config(self):
         """Save configuration to JSON file"""
+        config_file = self.get_profile_path(CONFIG_FILE)
         try:
-            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"Error saving config: {e}")
 
     def load_history(self):
         """Load browsing history from JSON file"""
+        history_file = self.get_profile_path(HISTORY_FILE)
         try:
-            if os.path.exists(HISTORY_FILE):
-                with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+            if os.path.exists(history_file):
+                with open(history_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
         except Exception as e:
             print(f"Error loading history: {e}")
@@ -304,8 +447,9 @@ class MainWindow(QMainWindow):
 
     def save_history(self):
         """Save browsing history to JSON file"""
+        history_file = self.get_profile_path(HISTORY_FILE)
         try:
-            with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            with open(history_file, 'w', encoding='utf-8') as f:
                 json.dump(self.history, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"Error saving history: {e}")
@@ -394,9 +538,10 @@ class MainWindow(QMainWindow):
 
     def load_bookmarks(self):
         """Load bookmarks from JSON file"""
+        bookmarks_file = self.get_profile_path(BOOKMARKS_FILE)
         try:
-            if os.path.exists(BOOKMARKS_FILE):
-                with open(BOOKMARKS_FILE, 'r', encoding='utf-8') as f:
+            if os.path.exists(bookmarks_file):
+                with open(bookmarks_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
         except Exception as e:
             print(f"Error loading bookmarks: {e}")
@@ -404,8 +549,9 @@ class MainWindow(QMainWindow):
 
     def save_bookmarks(self):
         """Save bookmarks to JSON file"""
+        bookmarks_file = self.get_profile_path(BOOKMARKS_FILE)
         try:
-            with open(BOOKMARKS_FILE, 'w', encoding='utf-8') as f:
+            with open(bookmarks_file, 'w', encoding='utf-8') as f:
                 json.dump(self.bookmarks, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"Error saving bookmarks: {e}")
