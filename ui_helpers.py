@@ -28,7 +28,7 @@ def update_history_menu(window):
             
             action = QAction(title, window)
             action.setStatusTip(url)
-            action.triggered.connect(lambda checked, u=url: window.tabs.currentWidget().setUrl(QUrl(u)))
+            action.triggered.connect(lambda checked, u=url: navigate_to_url_helper(window, u))
             window.history_menu.addAction(action)
     else:
         empty_action = QAction("No history", window)
@@ -69,7 +69,7 @@ def update_bookmarks_menu(window):
             
             action = QAction(title, window)
             action.setStatusTip(url)
-            action.triggered.connect(lambda checked, u=url: window.tabs.currentWidget().setUrl(QUrl(u)))
+            action.triggered.connect(lambda checked, u=url: navigate_to_url_helper(window, u))
             window.bookmarks_menu.addAction(action)
     else:
         empty_action = QAction("No bookmarks", window)
@@ -79,7 +79,7 @@ def update_bookmarks_menu(window):
 
 def update_bookmark_button(window):
     """Update bookmark button appearance based on current page"""
-    browser = window.tabs.currentWidget()
+    browser = window.get_current_browser()
     if browser:
         url = browser.url().toString()
         if window.bookmark_manager.is_bookmarked(url):
@@ -92,7 +92,7 @@ def update_bookmark_button(window):
 
 def toggle_bookmark(window):
     """Toggle bookmark for current page"""
-    browser = window.tabs.currentWidget()
+    browser = window.get_current_browser()
     if browser:
         url = browser.url().toString()
         
@@ -189,6 +189,13 @@ def switch_profile(window, profile_name):
     window.status_profile.setText(f"Profile: {window.profile_manager.current_profile}")
     
     QMessageBox.information(window, "Profile Switched", f"Switched to profile: {profile_name}")
+
+
+def navigate_to_url_helper(window, url):
+    """Helper to navigate to URL"""
+    browser = window.get_current_browser()
+    if browser:
+        browser.setUrl(QUrl(url))
 
 
 def update_history_toggle_button(window):

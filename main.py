@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
 
         reload_btn = QAction("Reload", self)
         reload_btn.setStatusTip("Reload page")
-        reload_btn.triggered.connect(lambda: self.tabs.currentWidget().reload())
+        reload_btn.triggered.connect(self.reload_page)
         navtb.addAction(reload_btn)
 
         navtb.addSeparator()
@@ -132,6 +132,14 @@ class MainWindow(QMainWindow):
 
         self.history_menu = self.menuBar().addMenu("&History")
         ui_helpers.update_history_menu(self)
+
+        tools_menu = self.menuBar().addMenu("&Tools")
+        
+        dev_tools_action = QAction("Toggle Dev Tools", self)
+        dev_tools_action.setShortcut("F12")
+        dev_tools_action.setStatusTip("Show/Hide Developer Tools")
+        dev_tools_action.triggered.connect(self.toggle_current_dev_tools)
+        tools_menu.addAction(dev_tools_action)
 
         self.profile_menu = self.menuBar().addMenu("&Profile")
         ui_helpers.update_profile_menu(self)
@@ -167,10 +175,33 @@ class MainWindow(QMainWindow):
         if qurl is None:
             qurl = QUrl('')
 
+        # Create a splitter to hold browser and dev tools
+        splitter = QSplitter(Qt.Horizontal)
+        
         browser = QWebEngineView()
         browser.setUrl(qurl)
-        i = self.tabs.addTab(browser, label)
-
+        
+        # Enable context menu for dev tools
+        browser.setContextMenuPolicy(Qt.CustomContextMenu)
+        browser.customContextMenuRequested.connect(lambda pos, b=browser, s=splitter: self.show_context_menu(pos, b, s))
+        
+        # Create dev tools view (hidden by default)
+        dev_view = QWebEngineView()
+        dev_view.setVisible(False)
+        browser.page().setDevToolsPage(dev_view.page())
+        
+        # Add to splitter
+        splitter.addWidget(browser)
+        splitter.addWidget(dev_view)
+        splitter.setStretchFactor(0, 3)  # Browser takes 75%
+        splitter.setStretchFactor(1, 1)  # Dev tools takes 25%
+        
+        # Store references
+        splitter.browser = browser
+        splitter.dev_view = dev_view
+        splitter.dev_tools_visible = False
+        
+        i = self.tabs.addTab(splitter, label)
         self.tabs.setCurrentIndex(i)
 
         # Connect signals
@@ -183,15 +214,24 @@ class MainWindow(QMainWindow):
         browser.loadStarted.connect(self.on_load_started)
         browser.loadProgress.connect(self.on_load_progress)
         browser.loadFinished.connect(self.on_load_finished)
+    
+    def get_current_browser(self):
+        """Get the current browser view from the tab"""
+        current_widget = self.tabs.currentWidget()
+        if isinstance(current_widget, QSplitter):
+            return current_widget.browser
+        return current_widget
 
     def tab_open_doubleclick(self, i):
         if i == -1:
             self.add_new_tab()
 
     def current_tab_changed(self, i):
-        qurl = self.tabs.currentWidget().url()
-        self.update_urlbar(qurl, self.tabs.currentWidget())
-        self.update_title(self.tabs.currentWidget())
+        browser = self.get_current_browser()
+        if browser:
+            qurl = browser.url()
+            self.update_urlbar(qurl, browser)
+            self.update_title(browser)
 
     def close_current_tab(self, i):
         if self.tabs.count() <= MIN_TABS:
@@ -199,15 +239,18 @@ class MainWindow(QMainWindow):
         self.tabs.removeTab(i)
 
     def update_title(self, browser):
-        if browser != self.tabs.currentWidget():
+        current_browser = self.get_current_browser()
+        if browser != current_browser:
             return
 
-        title = self.tabs.currentWidget().page().title()
+        title = browser.page().title()
         self.setWindowTitle(f"{title} - {APP_NAME}")
         self.status_title.setText(f"Title: {title}")
 
     def navigate_mozarella(self):
-        self.tabs.currentWidget().setUrl(QUrl(COMPANY_URL))
+        browser = self.get_current_browser()
+        if browser:
+            browser.setUrl(QUrl(COMPANY_URL))
 
     def about(self):
         dlg = AboutDialog()
@@ -220,8 +263,10 @@ class MainWindow(QMainWindow):
             with open(filename, 'r') as f:
                 html = f.read()
 
-            self.tabs.currentWidget().setHtml(html)
-            self.urlbar.setText(filename)
+            browser = self.get_current_browser()
+            if browser:
+                browser.setHtml(html)
+                self.urlbar.setText(filename)
 
     def save_file(self):
         filename, _ = QFileDialog.getSaveFileName(self, "Save Page As", "", HTML_FILE_FILTER)
@@ -236,25 +281,37 @@ class MainWindow(QMainWindow):
         dlg.paintRequested.connect(self.browser.print_)
         dlg.exec_()
 
+    def reload_page(self):
+        """Reload current page"""
+        browser = self.get_current_browser()
+        if browser:
+            browser.reload()
+    
     def navigate_home(self):
-        self.tabs.currentWidget().setUrl(QUrl(DEFAULT_HOME_URL))
+        browser = self.get_current_browser()
+        if browser:
+            browser.setUrl(QUrl(DEFAULT_HOME_URL))
 
     def navigate_to_url(self):
         text = self.urlbar.text().strip()
+        browser = self.get_current_browser()
+        if not browser:
+            return
         
         # Check if it looks like a URL (has dots and no spaces)
         if "." in text and " " not in text:
             q = QUrl(text)
             if q.scheme() == "":
                 q.setScheme(DEFAULT_PROTOCOL)
-            self.tabs.currentWidget().setUrl(q)
+            browser.setUrl(q)
         else:
             # Treat as search query
             search_url = SEARCH_ENGINE_URL.format(text.replace(" ", "+"))
-            self.tabs.currentWidget().setUrl(QUrl(search_url))
+            browser.setUrl(QUrl(search_url))
 
     def update_urlbar(self, q, browser=None):
-        if browser != self.tabs.currentWidget():
+        current_browser = self.get_current_browser()
+        if browser != current_browser:
             return
 
         # Add to history
@@ -285,11 +342,44 @@ class MainWindow(QMainWindow):
         """Called when page finishes loading"""
         self.status_progress.setVisible(False)
         if success:
-            browser = self.tabs.currentWidget()
-            title = browser.page().title()
-            self.status_title.setText(f"Title: {title}")
+            browser = self.get_current_browser()
+            if browser:
+                title = browser.page().title()
+                self.status_title.setText(f"Title: {title}")
         else:
             self.status_title.setText("Failed to load")
+
+    def show_context_menu(self, pos, browser, splitter):
+        """Show context menu with dev tools option"""
+        menu = QMenu(self)
+        
+        # Add dev tools toggle action
+        if splitter.dev_tools_visible:
+            dev_tools_action = QAction("Hide Dev Tools", self)
+        else:
+            dev_tools_action = QAction("Inspect Element (Dev Tools)", self)
+        
+        dev_tools_action.triggered.connect(lambda: self.toggle_dev_tools(splitter))
+        menu.addAction(dev_tools_action)
+        
+        # Show menu at cursor position
+        menu.exec_(browser.mapToGlobal(pos))
+    
+    def toggle_dev_tools(self, splitter):
+        """Toggle developer tools visibility"""
+        splitter.dev_tools_visible = not splitter.dev_tools_visible
+        splitter.dev_view.setVisible(splitter.dev_tools_visible)
+        
+        if splitter.dev_tools_visible:
+            # Set splitter sizes when showing dev tools
+            total_width = splitter.width()
+            splitter.setSizes([int(total_width * 0.6), int(total_width * 0.4)])
+    
+    def toggle_current_dev_tools(self):
+        """Toggle dev tools for current tab"""
+        current_widget = self.tabs.currentWidget()
+        if isinstance(current_widget, QSplitter):
+            self.toggle_dev_tools(current_widget)
 
     def reset_profile(self):
         """Reset current profile to default (clear all data)"""
