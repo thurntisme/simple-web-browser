@@ -21,19 +21,19 @@ class AboutDialog(QDialog):
 
         layout = QVBoxLayout()
 
-        title = QLabel("Mozart")
+        title = QLabel(APP_NAME)
         font = title.font()
-        font.setPointSize(20)
+        font.setPointSize(ABOUT_TITLE_FONT_SIZE)
         title.setFont(font)
 
         layout.addWidget(title)
 
         logo = QLabel()
-        logo.setPixmap(QPixmap(os.path.join('images', 'ma-icon-128.png')))
+        logo.setPixmap(QPixmap(os.path.join(IMAGES_DIR, ICON_APP_128)))
         layout.addWidget(logo)
 
-        layout.addWidget(QLabel("Version 2018.10"))
-        layout.addWidget(QLabel("Copyright 2018 HTOUKOUR COGNITIVE"))
+        layout.addWidget(QLabel(f"Version {APP_VERSION}"))
+        layout.addWidget(QLabel(APP_COPYRIGHT))
 
         for i in range(0, layout.count()):
             layout.itemAt(i).setAlignment(Qt.AlignHCenter)
@@ -60,25 +60,25 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
 
         navtb = QToolBar("Navigation")
-        navtb.setIconSize(QSize(16, 16))
+        navtb.setIconSize(QSize(*TOOLBAR_ICON_SIZE))
         self.addToolBar(navtb)
 
-        back_btn = QAction(QIcon(os.path.join('images', 'arrow-180.png')), "Back", self)
+        back_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_BACK)), "Back", self)
         back_btn.setStatusTip("Back to previous page")
         back_btn.triggered.connect(lambda: self.tabs.currentWidget().back())
         navtb.addAction(back_btn)
 
-        next_btn = QAction(QIcon(os.path.join('images', 'arrow-000.png')), "Forward", self)
+        next_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_FORWARD)), "Forward", self)
         next_btn.setStatusTip("Forward to next page")
         next_btn.triggered.connect(lambda: self.tabs.currentWidget().forward())
         navtb.addAction(next_btn)
 
-        reload_btn = QAction(QIcon(os.path.join('images', 'arrow-circle-315.png')), "Reload", self)
+        reload_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_RELOAD)), "Reload", self)
         reload_btn.setStatusTip("Reload page")
         reload_btn.triggered.connect(lambda: self.tabs.currentWidget().reload())
         navtb.addAction(reload_btn)
 
-        home_btn = QAction(QIcon(os.path.join('images', 'home.png')), "Home", self)
+        home_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_HOME)), "Home", self)
         home_btn.setStatusTip("Go home")
         home_btn.triggered.connect(self.navigate_home)
         navtb.addAction(home_btn)
@@ -86,14 +86,14 @@ class MainWindow(QMainWindow):
         navtb.addSeparator()
 
         self.httpsicon = QLabel()  # Yes, really!
-        self.httpsicon.setPixmap(QPixmap(os.path.join('images', 'lock-nossl.png')))
+        self.httpsicon.setPixmap(QPixmap(os.path.join(IMAGES_DIR, ICON_NO_SSL)))
         navtb.addWidget(self.httpsicon)
 
         self.urlbar = QLineEdit()
         self.urlbar.returnPressed.connect(self.navigate_to_url)
         navtb.addWidget(self.urlbar)
 
-        stop_btn = QAction(QIcon(os.path.join('images', 'cross-circle.png')), "Stop", self)
+        stop_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_STOP)), "Stop", self)
         stop_btn.setStatusTip("Stop loading current page")
         stop_btn.triggered.connect(lambda: self.tabs.currentWidget().stop())
         navtb.addAction(stop_btn)
@@ -103,47 +103,47 @@ class MainWindow(QMainWindow):
 
         file_menu = self.menuBar().addMenu("&File")
 
-        new_tab_action = QAction(QIcon(os.path.join('images', 'ui-tab--plus.png')), "New Tab", self)
+        new_tab_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_NEW_TAB)), "New Tab", self)
         new_tab_action.setStatusTip("Open a new tab")
         new_tab_action.triggered.connect(lambda _: self.add_new_tab())
         file_menu.addAction(new_tab_action)
 
-        open_file_action = QAction(QIcon(os.path.join('images', 'disk--arrow.png')), "Open file...", self)
+        open_file_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_OPEN_FILE)), "Open file...", self)
         open_file_action.setStatusTip("Open from file")
         open_file_action.triggered.connect(self.open_file)
         file_menu.addAction(open_file_action)
 
-        save_file_action = QAction(QIcon(os.path.join('images', 'disk--pencil.png')), "Save Page As...", self)
+        save_file_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_SAVE_FILE)), "Save Page As...", self)
         save_file_action.setStatusTip("Save current page to file")
         save_file_action.triggered.connect(self.save_file)
         file_menu.addAction(save_file_action)
 
-        print_action = QAction(QIcon(os.path.join('images', 'printer.png')), "Print...", self)
+        print_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_PRINT)), "Print...", self)
         print_action.setStatusTip("Print current page")
         print_action.triggered.connect(self.print_page)
         file_menu.addAction(print_action)
 
         help_menu = self.menuBar().addMenu("&Help")
 
-        about_action = QAction(QIcon(os.path.join('images', 'question.png')), "About Mozart", self)
-        about_action.setStatusTip("Find out more about Mozart")  # Hungry!
+        about_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_ABOUT)), f"About {APP_NAME}", self)
+        about_action.setStatusTip(f"Find out more about {APP_NAME}")
         about_action.triggered.connect(self.about)
         help_menu.addAction(about_action)
 
-        navigate_mozarella_action = QAction(QIcon(os.path.join('images', 'lifebuoy.png')),
-                                            "HTOUKOUR COGNITIVE Homepage", self)
-        navigate_mozarella_action.setStatusTip("Go to HTOUKOUR COGNITIVE Homepage")
+        navigate_mozarella_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_HELP)),
+                                            f"{APP_ORGANIZATION} Homepage", self)
+        navigate_mozarella_action.setStatusTip(f"Go to {APP_ORGANIZATION} Homepage")
         navigate_mozarella_action.triggered.connect(self.navigate_mozarella)
         help_menu.addAction(navigate_mozarella_action)
 
-        self.add_new_tab(QUrl('http://www.google.com'), 'Homepage')
+        self.add_new_tab(QUrl(DEFAULT_HOME_URL), DEFAULT_NEW_TAB_LABEL)
 
         self.show()
 
-        self.setWindowTitle("Mozart")
-        self.setWindowIcon(QIcon(os.path.join('images', 'ma-icon-64.png')))
+        self.setWindowTitle(WINDOW_TITLE)
+        self.setWindowIcon(QIcon(os.path.join(IMAGES_DIR, ICON_APP_64)))
 
-    def add_new_tab(self, qurl=None, label="Blank"):
+    def add_new_tab(self, qurl=None, label=DEFAULT_TAB_LABEL):
 
         if qurl is None:
             qurl = QUrl('')
@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):
         self.update_title(self.tabs.currentWidget())
 
     def close_current_tab(self, i):
-        if self.tabs.count() < 2:
+        if self.tabs.count() < MIN_TABS:
             return
 
         self.tabs.removeTab(i)
@@ -183,10 +183,10 @@ class MainWindow(QMainWindow):
             return
 
         title = self.tabs.currentWidget().page().title()
-        self.setWindowTitle("%s - Mozart" % title)
+        self.setWindowTitle(f"{title} - {APP_NAME}")
 
     def navigate_mozarella(self):
-        self.tabs.currentWidget().setUrl(QUrl("https://htoukour.co.za"))
+        self.tabs.currentWidget().setUrl(QUrl(COMPANY_URL))
 
     def about(self):
         dlg = AboutDialog()
@@ -194,8 +194,7 @@ class MainWindow(QMainWindow):
 
     def open_file(self):
         filename, _ = QFileDialog.getOpenFileName(self, "Open file", "",
-                                                  "Hypertext Markup Language (*.htm *.html);;"
-                                                  "All files (*.*)")
+                                                  HTML_FILE_FILTER)
 
         if filename:
             with open(filename, 'r') as f:
@@ -206,8 +205,7 @@ class MainWindow(QMainWindow):
 
     def save_file(self):
         filename, _ = QFileDialog.getSaveFileName(self, "Save Page As", "",
-                                                  "Hypertext Markup Language (*.htm *html);;"
-                                                  "All files (*.*)")
+                                                  HTML_FILE_FILTER)
 
         if filename:
             html = self.tabs.currentWidget().page().mainFrame().toHtml()
@@ -220,12 +218,12 @@ class MainWindow(QMainWindow):
         dlg.exec_()
 
     def navigate_home(self):
-        self.tabs.currentWidget().setUrl(QUrl("http://www.google.com"))
+        self.tabs.currentWidget().setUrl(QUrl(DEFAULT_HOME_URL))
 
     def navigate_to_url(self):  # Does not receive the Url
         q = QUrl(self.urlbar.text())
         if q.scheme() == "":
-            q.setScheme("http")
+            q.setScheme(DEFAULT_PROTOCOL)
 
         self.tabs.currentWidget().setUrl(q)
 
@@ -237,20 +235,20 @@ class MainWindow(QMainWindow):
 
         if q.scheme() == 'https':
             # Secure padlock icon
-            self.httpsicon.setPixmap(QPixmap(os.path.join('images', 'lock-ssl.png')))
+            self.httpsicon.setPixmap(QPixmap(os.path.join(IMAGES_DIR, ICON_SSL)))
 
         else:
             # Insecure padlock icon
-            self.httpsicon.setPixmap(QPixmap(os.path.join('images', 'lock-nossl.png')))
+            self.httpsicon.setPixmap(QPixmap(os.path.join(IMAGES_DIR, ICON_NO_SSL)))
 
         self.urlbar.setText(q.toString())
         self.urlbar.setCursorPosition(0)
 
 
 app = QApplication(sys.argv)
-app.setApplicationName("Mozart")
-app.setOrganizationName("HTOUKOUR COGNITIVE")
-app.setOrganizationDomain("htoukour.co.za")
+app.setApplicationName(APP_NAME)
+app.setOrganizationName(APP_ORGANIZATION)
+app.setOrganizationDomain(APP_DOMAIN)
 
 window = MainWindow()
 
