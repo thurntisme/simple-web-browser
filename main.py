@@ -12,6 +12,7 @@ from profile_manager import ProfileManager
 from history_manager import HistoryManager
 from bookmark_manager import BookmarkManager
 from config_manager import ConfigManager
+from session_tracker import SessionTracker
 import ui_helpers
 
 
@@ -62,6 +63,8 @@ class MainWindow(QMainWindow):
         
         self.bookmark_manager = BookmarkManager(self.profile_manager)
         self.bookmark_manager.load()
+        
+        self.session_tracker = SessionTracker(self.profile_manager)
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
@@ -172,9 +175,13 @@ class MainWindow(QMainWindow):
         reset_action.triggered.connect(self.reset_profile)
         help_menu.addAction(reset_action)
 
-        # Load home URL from config
-        home_url = self.config_manager.get("home_url", DEFAULT_HOME_URL)
-        self.add_new_tab(QUrl(home_url), DEFAULT_NEW_TAB_LABEL)
+        # Load home page (welcome or custom URL)
+        use_welcome = self.config_manager.get("use_welcome_page", True)
+        if use_welcome:
+            self.add_new_tab(self.get_welcome_page_url(), "Welcome")
+        else:
+            home_url = self.config_manager.get("home_url", DEFAULT_HOME_URL)
+            self.add_new_tab(QUrl(home_url), DEFAULT_NEW_TAB_LABEL)
 
         self.setWindowTitle(WINDOW_TITLE)
         self.setWindowIcon(QIcon(os.path.join(IMAGES_DIR, ICON_APP_64)))
@@ -299,6 +306,30 @@ class MainWindow(QMainWindow):
         if browser:
             browser.reload()
     
+    def get_welcome_page_url(self):
+        """Generate welcome page with session stats"""
+        # Read welcome page template
+        with open('welcome_page.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Replace placeholders with actual data
+        session_start = self.session_tracker.session_start.strftime("%I:%M %p")
+        sessions_today = self.session_tracker.get_sessions_today()
+        
+        html_content = html_content.replace('SESSION_START_PLACEHOLDER', session_start)
+        html_content = html_content.replace('SESSIONS_TODAY_PLACEHOLDER', str(sessions_today))
+        
+        # Create a data URL
+        from urllib.parse import quote
+        data_url = f"data:text/html;charset=utf-8,{quote(html_content)}"
+        return QUrl(data_url)
+    
+    def closeEvent(self, event):
+        """Handle application closing"""
+        # End session and save data
+        self.session_tracker.end_session()
+        event.accept()
+    
     def apply_font_size(self, font_size):
         """Apply font size to all open tabs"""
         for i in range(self.tabs.count()):
@@ -311,13 +342,22 @@ class MainWindow(QMainWindow):
     def navigate_home(self):
         browser = self.get_current_browser()
         if browser:
-            home_url = self.config_manager.get("home_url", DEFAULT_HOME_URL)
-            browser.setUrl(QUrl(home_url))
+            use_welcome = self.config_manager.get("use_welcome_page", True)
+            if use_welcome:
+                browser.setUrl(self.get_welcome_page_url())
+            else:
+                home_url = self.config_manager.get("home_url", DEFAULT_HOME_URL)
+                browser.setUrl(QUrl(home_url))
 
     def navigate_to_url(self):
         text = self.urlbar.text().strip()
         browser = self.get_current_browser()
         if not browser:
+            return
+        
+        # Check for special "welcome" keyword
+        if text.lower() == "welcome":
+            browser.setUrl(self.get_welcome_page_url())
             return
         
         # Check if it looks like a URL (has dots and no spaces)
@@ -341,15 +381,24 @@ class MainWindow(QMainWindow):
         self.history_manager.add(q.toString(), browser.page().title())
         ui_helpers.update_history_menu(self)
 
-        self.urlbar.setText(q.toString())
+        # Check if it's the welcome page (data URL)
+        url_string = q.toString()
+        if url_string.startswith("data:text/html") and "Welcome to MonoGuard" in url_string:
+            self.urlbar.setText("welcome")
+        else:
+            self.urlbar.setText(url_string)
+        
         self.urlbar.setCursorPosition(0)
         
         # Update bookmark button
         ui_helpers.update_bookmark_button(self)
         
         # Update status bar info
-        protocol = "Secure (HTTPS)" if q.scheme() == 'https' else "HTTP"
-        self.status_info.setText(f"{protocol} | {q.host()}")
+        if url_string.startswith("data:text/html"):
+            self.status_info.setText("Welcome Page")
+        else:
+            protocol = "Secure (HTTPS)" if q.scheme() == 'https' else "HTTP"
+            self.status_info.setText(f"{protocol} | {q.host()}")
 
     def on_load_started(self):
         """Called when page starts loading"""
@@ -575,6 +624,9 @@ class MainWindow(QMainWindow):
                 self.config_manager.set("font_size", settings["font_size"])
                 self.apply_font_size(settings["font_size"])
             
+            # Update welcome page setting
+            self.config_manager.set("use_welcome_page", settings.get("use_welcome_page", True))
+            
             QMessageBox.information(self, "Settings Saved", "Browser settings have been updated.")
 
     def reset_profile(self):
@@ -634,6 +686,16 @@ class BrowserSettingsDialog(QDialog):
         self.home_url_input.setPlaceholderText("Enter home page URL")
         home_layout.addWidget(QLabel("Home URL:"))
         home_layout.addWidget(self.home_url_input)
+        
+        # Welcome page checkbox
+        self.welcome_page_checkbox = QCheckBox("Set welcome page as homepage")
+        use_welcome = parent.config_manager.get("use_welcome_page", True)
+        self.welcome_page_checkbox.setChecked(use_welcome)
+        self.welcome_page_checkbox.stateChanged.connect(self.toggle_welcome_page)
+        home_layout.addWidget(self.welcome_page_checkbox)
+        
+        # Disable URL input if welcome page is enabled
+        self.home_url_input.setEnabled(not use_welcome)
         
         home_group.setLayout(home_layout)
         layout.addWidget(home_group)
@@ -702,12 +764,18 @@ class BrowserSettingsDialog(QDialog):
         
         self.setLayout(layout)
     
+    def toggle_welcome_page(self, state):
+        """Toggle welcome page checkbox"""
+        # Enable/disable URL input based on checkbox
+        self.home_url_input.setEnabled(not self.welcome_page_checkbox.isChecked())
+    
     def get_settings(self):
         """Return the settings from the dialog"""
         return {
             "home_url": self.home_url_input.text(),
             "search_engine": self.search_engine_combo.currentData(),
-            "font_size": self.font_size_spin.value()
+            "font_size": self.font_size_spin.value(),
+            "use_welcome_page": self.welcome_page_checkbox.isChecked()
         }
 
 

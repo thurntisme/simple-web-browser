@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to MonoGuard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+      }
+
+      .container {
+        text-align: center;
+        padding: 40px;
+        max-width: 800px;
+      }
+
+      .greeting {
+        font-size: 3em;
+        font-weight: 300;
+        margin-bottom: 20px;
+        animation: fadeIn 1s ease-in;
+      }
+
+      .emoji {
+        font-size: 4em;
+        margin: 20px 0;
+        animation: wave 2s ease-in-out infinite;
+      }
+
+      .message {
+        font-size: 1.5em;
+        margin: 30px 0;
+        opacity: 0.9;
+      }
+
+      .stats {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 30px;
+        margin-top: 40px;
+        display: inline-block;
+      }
+
+      .stat-item {
+        margin: 15px 0;
+        font-size: 1.2em;
+      }
+
+      .stat-value {
+        font-size: 2em;
+        font-weight: bold;
+        color: #ffd700;
+      }
+
+      .quick-links {
+        margin-top: 40px;
+      }
+
+      .quick-links a {
+        display: inline-block;
+        margin: 10px;
+        padding: 12px 24px;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        text-decoration: none;
+        border-radius: 25px;
+        transition: all 0.3s ease;
+      }
+
+      .quick-links a:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateY(-2px);
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes wave {
+        0%,
+        100% {
+          transform: rotate(0deg);
+        }
+        25% {
+          transform: rotate(20deg);
+        }
+        75% {
+          transform: rotate(-20deg);
+        }
+      }
+
+      .time-display {
+        font-size: 1.1em;
+        margin-top: 20px;
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="greeting" id="greeting">How are you today?</div>
+      <div class="emoji">👋</div>
+      <div class="message">Welcome to MonoGuard Browser</div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <div>Session Start At</div>
+          <div class="stat-value" id="sessionStart">
+            SESSION_START_PLACEHOLDER
+          </div>
+        </div>
+        <div class="stat-item">
+          <div>Sessions Today</div>
+          <div class="stat-value" id="sessionsToday">
+            SESSIONS_TODAY_PLACEHOLDER
+          </div>
+        </div>
+      </div>
+
+      <div class="time-display" id="currentTime"></div>
+
+      <div class="quick-links">
+        <a href="https://www.google.com">Google</a>
+        <a href="https://www.github.com">GitHub</a>
+        <a href="https://www.youtube.com">YouTube</a>
+        <a href="https://www.wikipedia.org">Wikipedia</a>
+      </div>
+    </div>
+
+    <script>
+      // Update greeting based on time of day
+      function updateGreeting() {
+        const hour = new Date().getHours();
+        const greetingEl = document.getElementById("greeting");
+
+        if (hour < 12) {
+          greetingEl.textContent = "Good Morning! ☀️";
+        } else if (hour < 18) {
+          greetingEl.textContent = "Good Afternoon! 🌤️";
+        } else {
+          greetingEl.textContent = "Good Evening! 🌙";
+        }
+      }
+
+      // Update current time
+      function updateCurrentTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString();
+        const dateString = now.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+        document.getElementById(
+          "currentTime"
+        ).textContent = `${dateString} • ${timeString}`;
+      }
+
+      // Initialize
+      updateGreeting();
+      updateCurrentTime();
+
+      // Update every second
+      setInterval(updateCurrentTime, 1000);
+    </script>
+  </body>
+</html>
