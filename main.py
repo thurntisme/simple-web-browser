@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         self.history = self.load_history()
+        self.bookmarks = self.load_bookmarks()
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
@@ -118,6 +119,9 @@ class MainWindow(QMainWindow):
         print_action.setStatusTip("Print current page")
         print_action.triggered.connect(self.print_page)
         file_menu.addAction(print_action)
+
+        self.bookmarks_menu = self.menuBar().addMenu("&Bookmarks")
+        self.update_bookmarks_menu()
 
         self.history_menu = self.menuBar().addMenu("&History")
         self.update_history_menu()
@@ -353,6 +357,179 @@ class MainWindow(QMainWindow):
         self.history = []
         self.save_history()
         self.update_history_menu()
+
+    def load_bookmarks(self):
+        """Load bookmarks from JSON file"""
+        try:
+            if os.path.exists(BOOKMARKS_FILE):
+                with open(BOOKMARKS_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Error loading bookmarks: {e}")
+        return []
+
+    def save_bookmarks(self):
+        """Save bookmarks to JSON file"""
+        try:
+            with open(BOOKMARKS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.bookmarks, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving bookmarks: {e}")
+
+    def update_bookmarks_menu(self):
+        """Update the Bookmarks menu"""
+        self.bookmarks_menu.clear()
+        
+        add_action = QAction("Add Bookmark...", self)
+        add_action.setShortcut("Ctrl+D")
+        add_action.triggered.connect(self.add_bookmark)
+        self.bookmarks_menu.addAction(add_action)
+        
+        manage_action = QAction("Manage Bookmarks...", self)
+        manage_action.triggered.connect(self.manage_bookmarks)
+        self.bookmarks_menu.addAction(manage_action)
+        
+        if self.bookmarks:
+            self.bookmarks_menu.addSeparator()
+            
+            for bookmark in self.bookmarks:
+                title = bookmark.get("title", bookmark.get("url"))
+                url = bookmark.get("url")
+                
+                # Truncate long titles
+                if len(title) > 50:
+                    title = title[:47] + "..."
+                
+                action = QAction(title, self)
+                action.setStatusTip(url)
+                action.triggered.connect(lambda checked, u=url: self.navigate_to_bookmark(u))
+                self.bookmarks_menu.addAction(action)
+        else:
+            empty_action = QAction("No bookmarks", self)
+            empty_action.setEnabled(False)
+            self.bookmarks_menu.addAction(empty_action)
+
+    def add_bookmark(self):
+        """Add current page to bookmarks"""
+        browser = self.tabs.currentWidget()
+        if browser:
+            url = browser.url().toString()
+            title = browser.page().title()
+            
+            # Check if already bookmarked
+            for bookmark in self.bookmarks:
+                if bookmark.get("url") == url:
+                    QMessageBox.information(self, "Bookmark", "This page is already bookmarked!")
+                    return
+            
+            # Show dialog to edit title
+            new_title, ok = QInputDialog.getText(self, "Add Bookmark", 
+                                                  "Bookmark name:", 
+                                                  QLineEdit.Normal, 
+                                                  title)
+            
+            if ok and new_title:
+                bookmark = {
+                    "title": new_title,
+                    "url": url,
+                    "timestamp": datetime.now().isoformat()
+                }
+                self.bookmarks.append(bookmark)
+                self.save_bookmarks()
+                self.update_bookmarks_menu()
+                QMessageBox.information(self, "Bookmark", "Bookmark added successfully!")
+
+    def navigate_to_bookmark(self, url):
+        """Navigate to a bookmarked URL"""
+        self.tabs.currentWidget().setUrl(QUrl(url))
+
+    def manage_bookmarks(self):
+        """Open bookmark management dialog"""
+        dialog = BookmarkManagerDialog(self.bookmarks, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.bookmarks = dialog.get_bookmarks()
+            self.save_bookmarks()
+            self.update_bookmarks_menu()
+
+
+class BookmarkManagerDialog(QDialog):
+    """Dialog for managing bookmarks"""
+    def __init__(self, bookmarks, parent=None):
+        super().__init__(parent)
+        self.bookmarks = bookmarks.copy()
+        self.setWindowTitle("Manage Bookmarks")
+        self.setMinimumSize(600, 400)
+        
+        layout = QVBoxLayout()
+        
+        # List widget
+        self.list_widget = QListWidget()
+        self.update_list()
+        layout.addWidget(self.list_widget)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        edit_btn = QPushButton("Edit")
+        edit_btn.clicked.connect(self.edit_bookmark)
+        button_layout.addWidget(edit_btn)
+        
+        delete_btn = QPushButton("Delete")
+        delete_btn.clicked.connect(self.delete_bookmark)
+        button_layout.addWidget(delete_btn)
+        
+        button_layout.addStretch()
+        
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def update_list(self):
+        """Update the bookmark list"""
+        self.list_widget.clear()
+        for bookmark in self.bookmarks:
+            title = bookmark.get("title", "Untitled")
+            url = bookmark.get("url", "")
+            self.list_widget.addItem(f"{title} - {url}")
+    
+    def edit_bookmark(self):
+        """Edit selected bookmark"""
+        current_row = self.list_widget.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Edit Bookmark", "Please select a bookmark to edit.")
+            return
+        
+        bookmark = self.bookmarks[current_row]
+        new_title, ok = QInputDialog.getText(self, "Edit Bookmark", 
+                                              "Bookmark name:", 
+                                              QLineEdit.Normal, 
+                                              bookmark.get("title", ""))
+        
+        if ok and new_title:
+            self.bookmarks[current_row]["title"] = new_title
+            self.update_list()
+    
+    def delete_bookmark(self):
+        """Delete selected bookmark"""
+        current_row = self.list_widget.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Delete Bookmark", "Please select a bookmark to delete.")
+            return
+        
+        reply = QMessageBox.question(self, "Delete Bookmark", 
+                                      "Are you sure you want to delete this bookmark?",
+                                      QMessageBox.Yes | QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            del self.bookmarks[current_row]
+            self.update_list()
+    
+    def get_bookmarks(self):
+        """Return the modified bookmarks list"""
+        return self.bookmarks
 
 
 app = QApplication(sys.argv)

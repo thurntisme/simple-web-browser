@@ -11,6 +11,7 @@ APP_COPYRIGHT = "Copyright 2018 HTOUKOUR COGNITIVE"
 
 # File paths
 HISTORY_FILE = "history.json"
+BOOKMARKS_FILE = "bookmarks.json"
 MAX_HISTORY_ENTRIES = 20
 
 # Default browser settings
