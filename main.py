@@ -166,12 +166,19 @@ class MainWindow(QMainWindow):
 
         help_menu.addSeparator()
 
+        settings_action = QAction("Browser Settings", self)
+        settings_action.setStatusTip("Configure browser settings")
+        settings_action.triggered.connect(self.show_browser_settings)
+        help_menu.addAction(settings_action)
+
         reset_action = QAction("Reset to Default", self)
         reset_action.setStatusTip("Clear all profile data (history, bookmarks, config)")
         reset_action.triggered.connect(self.reset_profile)
         help_menu.addAction(reset_action)
 
-        self.add_new_tab(QUrl(DEFAULT_HOME_URL), DEFAULT_NEW_TAB_LABEL)
+        # Load home URL from config
+        home_url = self.config_manager.get("home_url", DEFAULT_HOME_URL)
+        self.add_new_tab(QUrl(home_url), DEFAULT_NEW_TAB_LABEL)
 
         self.setWindowTitle(WINDOW_TITLE)
         self.setWindowIcon(QIcon(os.path.join(IMAGES_DIR, ICON_APP_64)))
@@ -297,7 +304,8 @@ class MainWindow(QMainWindow):
     def navigate_home(self):
         browser = self.get_current_browser()
         if browser:
-            browser.setUrl(QUrl(DEFAULT_HOME_URL))
+            home_url = self.config_manager.get("home_url", DEFAULT_HOME_URL)
+            browser.setUrl(QUrl(home_url))
 
     def navigate_to_url(self):
         text = self.urlbar.text().strip()
@@ -312,8 +320,9 @@ class MainWindow(QMainWindow):
                 q.setScheme(DEFAULT_PROTOCOL)
             browser.setUrl(q)
         else:
-            # Treat as search query
-            search_url = SEARCH_ENGINE_URL.format(text.replace(" ", "+"))
+            # Treat as search query - use configured search engine
+            search_engine = self.config_manager.get("search_engine", SEARCH_ENGINE_URL)
+            search_url = search_engine.format(text.replace(" ", "+"))
             browser.setUrl(QUrl(search_url))
 
     def update_urlbar(self, q, browser=None):
@@ -539,6 +548,23 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to open browser:\n{str(e)}")
 
+    def show_browser_settings(self):
+        """Show browser settings dialog"""
+        dialog = BrowserSettingsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            # Apply settings
+            settings = dialog.get_settings()
+            
+            # Update home URL
+            if settings.get("home_url"):
+                self.config_manager.set("home_url", settings["home_url"])
+            
+            # Update search engine
+            if settings.get("search_engine"):
+                self.config_manager.set("search_engine", settings["search_engine"])
+            
+            QMessageBox.information(self, "Settings Saved", "Browser settings have been updated.")
+
     def reset_profile(self):
         """Reset current profile to default (clear all data)"""
         reply = QMessageBox.question(
@@ -574,6 +600,79 @@ class MainWindow(QMainWindow):
             
             QMessageBox.information(self, "Reset Complete", 
                                    f"Profile '{self.profile_manager.current_profile}' has been reset to default.")
+
+
+class BrowserSettingsDialog(QDialog):
+    """Dialog for browser settings"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent_window = parent
+        self.setWindowTitle("Browser Settings")
+        self.setMinimumSize(500, 300)
+        
+        layout = QVBoxLayout()
+        
+        # Home URL setting
+        home_group = QGroupBox("Home Page")
+        home_layout = QVBoxLayout()
+        
+        self.home_url_input = QLineEdit()
+        current_home = parent.config_manager.get("home_url", DEFAULT_HOME_URL)
+        self.home_url_input.setText(current_home)
+        self.home_url_input.setPlaceholderText("Enter home page URL")
+        home_layout.addWidget(QLabel("Home URL:"))
+        home_layout.addWidget(self.home_url_input)
+        
+        home_group.setLayout(home_layout)
+        layout.addWidget(home_group)
+        
+        # Search Engine setting
+        search_group = QGroupBox("Search Engine")
+        search_layout = QVBoxLayout()
+        
+        self.search_engine_combo = QComboBox()
+        search_engines = {
+            "DuckDuckGo": "https://duckduckgo.com/?q={}",
+            "Google": "https://www.google.com/search?q={}",
+            "Bing": "https://www.bing.com/search?q={}",
+            "Yahoo": "https://search.yahoo.com/search?p={}",
+        }
+        
+        current_search = parent.config_manager.get("search_engine", SEARCH_ENGINE_URL)
+        
+        for name, url in search_engines.items():
+            self.search_engine_combo.addItem(name, url)
+            if url == current_search:
+                self.search_engine_combo.setCurrentText(name)
+        
+        search_layout.addWidget(QLabel("Default Search Engine:"))
+        search_layout.addWidget(self.search_engine_combo)
+        
+        search_group.setLayout(search_layout)
+        layout.addWidget(search_group)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(self.accept)
+        button_layout.addWidget(save_btn)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addStretch()
+        layout.addLayout(button_layout)
+        
+        self.setLayout(layout)
+    
+    def get_settings(self):
+        """Return the settings from the dialog"""
+        return {
+            "home_url": self.home_url_input.text(),
+            "search_engine": self.search_engine_combo.currentData()
+        }
 
 
 app = QApplication(sys.argv)
