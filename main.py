@@ -149,6 +149,13 @@ class MainWindow(QMainWindow):
         navigate_mozarella_action.triggered.connect(self.navigate_mozarella)
         help_menu.addAction(navigate_mozarella_action)
 
+        help_menu.addSeparator()
+
+        reset_action = QAction("Reset to Default", self)
+        reset_action.setStatusTip("Clear all profile data (history, bookmarks, config)")
+        reset_action.triggered.connect(self.reset_profile)
+        help_menu.addAction(reset_action)
+
         self.add_new_tab(QUrl(DEFAULT_HOME_URL), DEFAULT_NEW_TAB_LABEL)
 
         self.setWindowTitle(WINDOW_TITLE)
@@ -283,6 +290,42 @@ class MainWindow(QMainWindow):
             self.status_title.setText(f"Title: {title}")
         else:
             self.status_title.setText("Failed to load")
+
+    def reset_profile(self):
+        """Reset current profile to default (clear all data)"""
+        reply = QMessageBox.question(
+            self, 
+            "Reset Profile", 
+            f"Are you sure you want to reset profile '{self.profile_manager.current_profile}'?\n\n"
+            "This will clear:\n"
+            "- All browsing history\n"
+            "- All bookmarks\n"
+            "- All configuration settings\n\n"
+            "This action cannot be undone!",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Clear all data
+            self.history_manager.clear()
+            self.bookmark_manager.bookmarks = []
+            self.bookmark_manager.save()
+            self.config_manager.config = {}
+            self.config_manager.save()
+            
+            # Reset history enabled to default (False)
+            self.history_manager.enabled = False
+            self.config_manager.set("history_enabled", False)
+            
+            # Update UI
+            self.history_toggle_btn.setChecked(False)
+            ui_helpers.update_history_toggle_button(self)
+            ui_helpers.update_bookmarks_menu(self)
+            ui_helpers.update_history_menu(self)
+            
+            QMessageBox.information(self, "Reset Complete", 
+                                   f"Profile '{self.profile_manager.current_profile}' has been reset to default.")
 
 
 app = QApplication(sys.argv)
