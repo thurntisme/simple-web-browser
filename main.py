@@ -138,10 +138,10 @@ class MainWindow(QMainWindow):
 
         self.add_new_tab(QUrl(DEFAULT_HOME_URL), DEFAULT_NEW_TAB_LABEL)
 
-        self.show()
-
         self.setWindowTitle(WINDOW_TITLE)
         self.setWindowIcon(QIcon(os.path.join(IMAGES_DIR, ICON_APP_64)))
+        
+        self.showMaximized()
 
     def add_new_tab(self, qurl=None, label=DEFAULT_TAB_LABEL):
 
