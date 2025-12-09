@@ -9,6 +9,10 @@ APP_ORGANIZATION = "HTOUKOUR COGNITIVE"
 APP_DOMAIN = "htoukour.co.za"
 APP_COPYRIGHT = "Copyright 2018 HTOUKOUR COGNITIVE"
 
+# File paths
+HISTORY_FILE = "history.json"
+MAX_HISTORY_ENTRIES = 20
+
 # Default browser settings
 DEFAULT_HOME_URL = "http://www.google.com"
 DEFAULT_PROTOCOL = "http"

@@ -6,6 +6,8 @@ from PyQt5.QtPrintSupport import *
 
 import os
 import sys
+import json
+from datetime import datetime
 
 from constants import *
 
@@ -46,6 +48,8 @@ class AboutDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
+
+        self.history = self.load_history()
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
@@ -122,6 +126,9 @@ class MainWindow(QMainWindow):
         print_action.setStatusTip("Print current page")
         print_action.triggered.connect(self.print_page)
         file_menu.addAction(print_action)
+
+        self.history_menu = self.menuBar().addMenu("&History")
+        self.update_history_menu()
 
         help_menu = self.menuBar().addMenu("&Help")
 
@@ -233,6 +240,9 @@ class MainWindow(QMainWindow):
             # If this signal is not from the current tab, ignore
             return
 
+        # Add to history
+        self.add_to_history(q.toString(), browser.page().title())
+
         if q.scheme() == 'https':
             # Secure padlock icon
             self.httpsicon.setPixmap(QPixmap(os.path.join(IMAGES_DIR, ICON_SSL)))
@@ -243,6 +253,87 @@ class MainWindow(QMainWindow):
 
         self.urlbar.setText(q.toString())
         self.urlbar.setCursorPosition(0)
+
+    def load_history(self):
+        """Load browsing history from JSON file"""
+        try:
+            if os.path.exists(HISTORY_FILE):
+                with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Error loading history: {e}")
+        return []
+
+    def save_history(self):
+        """Save browsing history to JSON file"""
+        try:
+            with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.history, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving history: {e}")
+
+    def add_to_history(self, url, title):
+        """Add a URL to browsing history (keeps last 20 entries)"""
+        if not url or url == "about:blank":
+            return
+        
+        entry = {
+            "url": url,
+            "title": title if title else url,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Avoid duplicate consecutive entries
+        if self.history and self.history[-1].get("url") == url:
+            return
+        
+        self.history.append(entry)
+        
+        # Keep only last 20 entries
+        if len(self.history) > MAX_HISTORY_ENTRIES:
+            self.history = self.history[-MAX_HISTORY_ENTRIES:]
+        
+        self.save_history()
+        self.update_history_menu()
+
+    def update_history_menu(self):
+        """Update the History menu with recent entries"""
+        self.history_menu.clear()
+        
+        clear_action = QAction("Clear History", self)
+        clear_action.triggered.connect(self.clear_history)
+        self.history_menu.addAction(clear_action)
+        
+        if self.history:
+            self.history_menu.addSeparator()
+            
+            # Show history in reverse order (most recent first)
+            for entry in reversed(self.history):
+                title = entry.get("title", entry.get("url"))
+                url = entry.get("url")
+                
+                # Truncate long titles
+                if len(title) > 50:
+                    title = title[:47] + "..."
+                
+                action = QAction(title, self)
+                action.setStatusTip(url)
+                action.triggered.connect(lambda checked, u=url: self.navigate_to_history_url(u))
+                self.history_menu.addAction(action)
+        else:
+            empty_action = QAction("No history", self)
+            empty_action.setEnabled(False)
+            self.history_menu.addAction(empty_action)
+
+    def navigate_to_history_url(self, url):
+        """Navigate to a URL from history"""
+        self.tabs.currentWidget().setUrl(QUrl(url))
+
+    def clear_history(self):
+        """Clear all browsing history"""
+        self.history = []
+        self.save_history()
+        self.update_history_menu()
 
 
 app = QApplication(sys.argv)
