@@ -195,6 +195,11 @@ class MainWindow(QMainWindow):
         browser = QWebEngineView()
         browser.setUrl(qurl)
         
+        # Apply font size from settings
+        font_size = self.config_manager.get("font_size", 16)
+        settings = browser.settings()
+        settings.setFontSize(settings.DefaultFontSize, font_size)
+        
         # Enable context menu for dev tools
         browser.setContextMenuPolicy(Qt.CustomContextMenu)
         browser.customContextMenuRequested.connect(lambda pos, b=browser, s=splitter: self.show_context_menu(pos, b, s))
@@ -300,6 +305,15 @@ class MainWindow(QMainWindow):
         browser = self.get_current_browser()
         if browser:
             browser.reload()
+    
+    def apply_font_size(self, font_size):
+        """Apply font size to all open tabs"""
+        for i in range(self.tabs.count()):
+            widget = self.tabs.widget(i)
+            if isinstance(widget, QSplitter):
+                browser = widget.browser
+                settings = browser.settings()
+                settings.setFontSize(settings.DefaultFontSize, font_size)
     
     def navigate_home(self):
         browser = self.get_current_browser()
@@ -563,6 +577,11 @@ class MainWindow(QMainWindow):
             if settings.get("search_engine"):
                 self.config_manager.set("search_engine", settings["search_engine"])
             
+            # Update font size
+            if settings.get("font_size"):
+                self.config_manager.set("font_size", settings["font_size"])
+                self.apply_font_size(settings["font_size"])
+            
             QMessageBox.information(self, "Settings Saved", "Browser settings have been updated.")
 
     def reset_profile(self):
@@ -651,6 +670,29 @@ class BrowserSettingsDialog(QDialog):
         search_group.setLayout(search_layout)
         layout.addWidget(search_group)
         
+        # Font Size setting
+        font_group = QGroupBox("Appearance")
+        font_layout = QVBoxLayout()
+        
+        font_size_layout = QHBoxLayout()
+        font_size_layout.addWidget(QLabel("Font Size:"))
+        
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setMinimum(8)
+        self.font_size_spin.setMaximum(32)
+        self.font_size_spin.setSuffix(" px")
+        current_font_size = parent.config_manager.get("font_size", 16)
+        self.font_size_spin.setValue(current_font_size)
+        font_size_layout.addWidget(self.font_size_spin)
+        
+        font_size_layout.addWidget(QLabel("(Default: 16px)"))
+        font_size_layout.addStretch()
+        
+        font_layout.addLayout(font_size_layout)
+        
+        font_group.setLayout(font_layout)
+        layout.addWidget(font_group)
+        
         # Buttons
         button_layout = QHBoxLayout()
         
@@ -671,7 +713,8 @@ class BrowserSettingsDialog(QDialog):
         """Return the settings from the dialog"""
         return {
             "home_url": self.home_url_input.text(),
-            "search_engine": self.search_engine_combo.currentData()
+            "search_engine": self.search_engine_combo.currentData(),
+            "font_size": self.font_size_spin.value()
         }
 
 
