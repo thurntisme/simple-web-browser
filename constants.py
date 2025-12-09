@@ -17,6 +17,7 @@ MAX_HISTORY_ENTRIES = 20
 DEFAULT_HOME_URL = "http://www.google.com"
 DEFAULT_PROTOCOL = "http"
 COMPANY_URL = "https://htoukour.co.za"
+SEARCH_ENGINE_URL = "https://duckduckgo.com/?q={}"
 
 # Window settings
 WINDOW_TITLE = "Mozart"

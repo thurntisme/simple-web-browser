@@ -228,11 +228,18 @@ class MainWindow(QMainWindow):
         self.tabs.currentWidget().setUrl(QUrl(DEFAULT_HOME_URL))
 
     def navigate_to_url(self):  # Does not receive the Url
-        q = QUrl(self.urlbar.text())
-        if q.scheme() == "":
-            q.setScheme(DEFAULT_PROTOCOL)
-
-        self.tabs.currentWidget().setUrl(q)
+        text = self.urlbar.text().strip()
+        
+        # Check if it looks like a URL (has dots and no spaces)
+        if "." in text and " " not in text:
+            q = QUrl(text)
+            if q.scheme() == "":
+                q.setScheme(DEFAULT_PROTOCOL)
+            self.tabs.currentWidget().setUrl(q)
+        else:
+            # Treat as search query
+            search_url = SEARCH_ENGINE_URL.format(text.replace(" ", "+"))
+            self.tabs.currentWidget().setUrl(QUrl(search_url))
 
     def update_urlbar(self, q, browser=None):
 
