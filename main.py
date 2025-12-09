@@ -288,7 +288,10 @@ class MainWindow(QMainWindow):
             self.status_title.setText("Failed to load")
 
     def ensure_profiles_dir(self):
-        """Ensure profiles directory exists"""
+        """Ensure storage and profiles directory exists"""
+        if not os.path.exists(STORAGE_DIR):
+            os.makedirs(STORAGE_DIR)
+            
         if not os.path.exists(PROFILES_DIR):
             os.makedirs(PROFILES_DIR)
         

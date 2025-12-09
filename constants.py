@@ -10,12 +10,13 @@ APP_DOMAIN = "htoukour.co.za"
 APP_COPYRIGHT = "Copyright 2018 HTOUKOUR COGNITIVE"
 
 # File paths
-PROFILES_DIR = "profiles"
+STORAGE_DIR = "storage"
+PROFILES_DIR = "storage/profiles"
 DEFAULT_PROFILE = "default"
 HISTORY_FILE = "history.json"
 BOOKMARKS_FILE = "bookmarks.json"
 CONFIG_FILE = "config.json"
-PROFILES_CONFIG_FILE = "profiles.json"
+PROFILES_CONFIG_FILE = "storage/profiles.json"
 MAX_HISTORY_ENTRIES = 20
 
 # Default browser settings
