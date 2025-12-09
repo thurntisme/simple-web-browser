@@ -94,6 +94,12 @@ class MainWindow(QMainWindow):
         self.urlbar = QLineEdit()
         self.urlbar.returnPressed.connect(self.navigate_to_url)
         navtb.addWidget(self.urlbar)
+        
+        self.bookmark_btn = QPushButton("☆")
+        self.bookmark_btn.setMaximumWidth(30)
+        self.bookmark_btn.setStatusTip("Add/Remove bookmark")
+        self.bookmark_btn.clicked.connect(self.toggle_bookmark)
+        navtb.addWidget(self.bookmark_btn)
 
         # Uncomment to disable native menubar on Mac
         # self.menuBar().setNativeMenuBar(False)
@@ -253,6 +259,9 @@ class MainWindow(QMainWindow):
         self.urlbar.setText(q.toString())
         self.urlbar.setCursorPosition(0)
         
+        # Update bookmark button
+        self.update_bookmark_button()
+        
         # Update status bar info
         protocol = "Secure (HTTPS)" if q.scheme() == 'https' else "HTTP"
         self.status_info.setText(f"{protocol} | {q.host()}")
@@ -409,20 +418,43 @@ class MainWindow(QMainWindow):
             empty_action.setEnabled(False)
             self.bookmarks_menu.addAction(empty_action)
 
-    def add_bookmark(self):
-        """Add current page to bookmarks"""
+    def is_bookmarked(self, url):
+        """Check if URL is bookmarked"""
+        for bookmark in self.bookmarks:
+            if bookmark.get("url") == url:
+                return True
+        return False
+
+    def update_bookmark_button(self):
+        """Update bookmark button appearance based on current page"""
         browser = self.tabs.currentWidget()
         if browser:
             url = browser.url().toString()
-            title = browser.page().title()
+            if self.is_bookmarked(url):
+                self.bookmark_btn.setText("★")  # Filled star
+                self.bookmark_btn.setStatusTip("Remove bookmark")
+            else:
+                self.bookmark_btn.setText("☆")  # Empty star
+                self.bookmark_btn.setStatusTip("Add bookmark")
+
+    def toggle_bookmark(self):
+        """Toggle bookmark for current page"""
+        browser = self.tabs.currentWidget()
+        if browser:
+            url = browser.url().toString()
             
             # Check if already bookmarked
-            for bookmark in self.bookmarks:
+            for i, bookmark in enumerate(self.bookmarks):
                 if bookmark.get("url") == url:
-                    QMessageBox.information(self, "Bookmark", "This page is already bookmarked!")
+                    # Remove bookmark
+                    del self.bookmarks[i]
+                    self.save_bookmarks()
+                    self.update_bookmarks_menu()
+                    self.update_bookmark_button()
                     return
             
-            # Show dialog to edit title
+            # Add bookmark
+            title = browser.page().title()
             new_title, ok = QInputDialog.getText(self, "Add Bookmark", 
                                                   "Bookmark name:", 
                                                   QLineEdit.Normal, 
@@ -437,7 +469,11 @@ class MainWindow(QMainWindow):
                 self.bookmarks.append(bookmark)
                 self.save_bookmarks()
                 self.update_bookmarks_menu()
-                QMessageBox.information(self, "Bookmark", "Bookmark added successfully!")
+                self.update_bookmark_button()
+
+    def add_bookmark(self):
+        """Add current page to bookmarks (called from menu)"""
+        self.toggle_bookmark()
 
     def navigate_to_bookmark(self, url):
         """Navigate to a bookmarked URL"""
