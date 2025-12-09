@@ -114,28 +114,6 @@ class MainWindow(QMainWindow):
         # Uncomment to disable native menubar on Mac
         # self.menuBar().setNativeMenuBar(False)
 
-        file_menu = self.menuBar().addMenu("&File")
-
-        new_tab_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_NEW_TAB)), "New Tab", self)
-        new_tab_action.setStatusTip("Open a new tab")
-        new_tab_action.triggered.connect(lambda _: self.add_new_tab())
-        file_menu.addAction(new_tab_action)
-
-        open_file_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_OPEN_FILE)), "Open file...", self)
-        open_file_action.setStatusTip("Open from file")
-        open_file_action.triggered.connect(self.open_file)
-        file_menu.addAction(open_file_action)
-
-        save_file_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_SAVE_FILE)), "Save Page As...", self)
-        save_file_action.setStatusTip("Save current page to file")
-        save_file_action.triggered.connect(self.save_file)
-        file_menu.addAction(save_file_action)
-
-        print_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_PRINT)), "Print...", self)
-        print_action.setStatusTip("Print current page")
-        print_action.triggered.connect(self.print_page)
-        file_menu.addAction(print_action)
-
         self.bookmarks_menu = self.menuBar().addMenu("&Bookmarks")
         self.update_bookmarks_menu()
 
