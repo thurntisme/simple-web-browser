@@ -76,43 +76,23 @@ class MainWindow(QMainWindow):
         self.status.addPermanentWidget(self.status_info)
 
         navtb = QToolBar("Navigation")
-        navtb.setIconSize(QSize(*TOOLBAR_ICON_SIZE))
         self.addToolBar(navtb)
 
-        back_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_BACK)), "Back", self)
-        back_btn.setStatusTip("Back to previous page")
-        back_btn.triggered.connect(lambda: self.tabs.currentWidget().back())
-        navtb.addAction(back_btn)
-
-        next_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_FORWARD)), "Forward", self)
-        next_btn.setStatusTip("Forward to next page")
-        next_btn.triggered.connect(lambda: self.tabs.currentWidget().forward())
-        navtb.addAction(next_btn)
-
-        reload_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_RELOAD)), "Reload", self)
-        reload_btn.setStatusTip("Reload page")
-        reload_btn.triggered.connect(lambda: self.tabs.currentWidget().reload())
-        navtb.addAction(reload_btn)
-
-        home_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_HOME)), "Home", self)
+        home_btn = QAction("Home", self)
         home_btn.setStatusTip("Go home")
         home_btn.triggered.connect(self.navigate_home)
         navtb.addAction(home_btn)
 
-        navtb.addSeparator()
+        reload_btn = QAction("Reload", self)
+        reload_btn.setStatusTip("Reload page")
+        reload_btn.triggered.connect(lambda: self.tabs.currentWidget().reload())
+        navtb.addAction(reload_btn)
 
-        self.httpsicon = QLabel()  # Yes, really!
-        self.httpsicon.setPixmap(QPixmap(os.path.join(IMAGES_DIR, ICON_NO_SSL)))
-        navtb.addWidget(self.httpsicon)
+        navtb.addSeparator()
 
         self.urlbar = QLineEdit()
         self.urlbar.returnPressed.connect(self.navigate_to_url)
         navtb.addWidget(self.urlbar)
-
-        stop_btn = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_STOP)), "Stop", self)
-        stop_btn.setStatusTip("Stop loading current page")
-        stop_btn.triggered.connect(lambda: self.tabs.currentWidget().stop())
-        navtb.addAction(stop_btn)
 
         # Uncomment to disable native menubar on Mac
         # self.menuBar().setNativeMenuBar(False)
@@ -265,14 +245,6 @@ class MainWindow(QMainWindow):
 
         # Add to history
         self.add_to_history(q.toString(), browser.page().title())
-
-        if q.scheme() == 'https':
-            # Secure padlock icon
-            self.httpsicon.setPixmap(QPixmap(os.path.join(IMAGES_DIR, ICON_SSL)))
-
-        else:
-            # Insecure padlock icon
-            self.httpsicon.setPixmap(QPixmap(os.path.join(IMAGES_DIR, ICON_NO_SSL)))
 
         self.urlbar.setText(q.toString())
         self.urlbar.setCursorPosition(0)
