@@ -55,13 +55,25 @@ class MainWindow(QMainWindow):
         self.tabs.setDocumentMode(True)
         self.tabs.tabBarDoubleClicked.connect(self.tab_open_doubleclick)
         self.tabs.currentChanged.connect(self.current_tab_changed)
-        self.tabs.setTabsClosable(True)
-        self.tabs.tabCloseRequested.connect(self.close_current_tab)
+        self.tabs.setTabsClosable(False)
 
         self.setCentralWidget(self.tabs)
 
         self.status = QStatusBar()
         self.setStatusBar(self.status)
+        
+        # Status bar widgets
+        self.status_title = QLabel()
+        self.status_title.setMinimumWidth(200)
+        self.status.addWidget(self.status_title)
+        
+        self.status_progress = QProgressBar()
+        self.status_progress.setMaximumWidth(150)
+        self.status_progress.setVisible(False)
+        self.status.addPermanentWidget(self.status_progress)
+        
+        self.status_info = QLabel()
+        self.status.addPermanentWidget(self.status_info)
 
         navtb = QToolBar("Navigation")
         navtb.setIconSize(QSize(*TOOLBAR_ICON_SIZE))
@@ -161,13 +173,16 @@ class MainWindow(QMainWindow):
 
         self.tabs.setCurrentIndex(i)
 
-        # More difficult! We only want to update the url when it's from the
-        # correct tab
+        # Connect signals
         browser.urlChanged.connect(lambda qurl, browser=browser:
                                    self.update_urlbar(qurl, browser))
 
         browser.loadFinished.connect(lambda _, i=i, browser=browser:
                                      self.tabs.setTabText(i, browser.page().title()))
+        
+        browser.loadStarted.connect(self.on_load_started)
+        browser.loadProgress.connect(self.on_load_progress)
+        browser.loadFinished.connect(self.on_load_finished)
 
     def tab_open_doubleclick(self, i):
         if i == -1:  # No tab under the click
@@ -179,7 +194,7 @@ class MainWindow(QMainWindow):
         self.update_title(self.tabs.currentWidget())
 
     def close_current_tab(self, i):
-        if self.tabs.count() < MIN_TABS:
+        if self.tabs.count() <= MIN_TABS:
             return
 
         self.tabs.removeTab(i)
@@ -191,6 +206,7 @@ class MainWindow(QMainWindow):
 
         title = self.tabs.currentWidget().page().title()
         self.setWindowTitle(f"{title} - {APP_NAME}")
+        self.status_title.setText(f"Title: {title}")
 
     def navigate_mozarella(self):
         self.tabs.currentWidget().setUrl(QUrl(COMPANY_URL))
@@ -260,6 +276,30 @@ class MainWindow(QMainWindow):
 
         self.urlbar.setText(q.toString())
         self.urlbar.setCursorPosition(0)
+        
+        # Update status bar info
+        protocol = "Secure (HTTPS)" if q.scheme() == 'https' else "HTTP"
+        self.status_info.setText(f"{protocol} | {q.host()}")
+
+    def on_load_started(self):
+        """Called when page starts loading"""
+        self.status_progress.setVisible(True)
+        self.status_progress.setValue(0)
+        self.status_title.setText("Loading...")
+
+    def on_load_progress(self, progress):
+        """Called during page loading"""
+        self.status_progress.setValue(progress)
+
+    def on_load_finished(self, success):
+        """Called when page finishes loading"""
+        self.status_progress.setVisible(False)
+        if success:
+            browser = self.tabs.currentWidget()
+            title = browser.page().title()
+            self.status_title.setText(f"Title: {title}")
+        else:
+            self.status_title.setText("Failed to load")
 
     def load_history(self):
         """Load browsing history from JSON file"""

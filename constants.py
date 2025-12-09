@@ -27,7 +27,7 @@ ABOUT_TITLE_FONT_SIZE = 20
 # Tab settings
 DEFAULT_TAB_LABEL = "Blank"
 DEFAULT_NEW_TAB_LABEL = "Homepage"
-MIN_TABS = 2
+MIN_TABS = 1
 
 # Image paths
 IMAGES_DIR = "images"
