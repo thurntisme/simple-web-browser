@@ -158,11 +158,7 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.about)
         help_menu.addAction(about_action)
 
-        navigate_mozarella_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_HELP)),
-                                            f"{APP_ORGANIZATION} Homepage", self)
-        navigate_mozarella_action.setStatusTip(f"Go to {APP_ORGANIZATION} Homepage")
-        navigate_mozarella_action.triggered.connect(self.navigate_mozarella)
-        help_menu.addAction(navigate_mozarella_action)
+
 
         help_menu.addSeparator()
 
@@ -266,10 +262,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{title} - {APP_NAME}")
         self.status_title.setText(f"Title: {title}")
 
-    def navigate_mozarella(self):
-        browser = self.get_current_browser()
-        if browser:
-            browser.setUrl(QUrl(COMPANY_URL))
+
 
     def about(self):
         dlg = AboutDialog()
@@ -720,8 +713,6 @@ class BrowserSettingsDialog(QDialog):
 
 app = QApplication(sys.argv)
 app.setApplicationName(APP_NAME)
-app.setOrganizationName(APP_ORGANIZATION)
-app.setOrganizationDomain(APP_DOMAIN)
 
 window = MainWindow()
 

@@ -3,11 +3,9 @@ Constants for the application
 """
 
 # Application settings
-APP_NAME = "Mozart"
-APP_VERSION = "2018.10"
-APP_ORGANIZATION = "HTOUKOUR COGNITIVE"
-APP_DOMAIN = "htoukour.co.za"
-APP_COPYRIGHT = "Copyright 2018 HTOUKOUR COGNITIVE"
+APP_NAME = "MonoGuard"
+APP_VERSION = "1.0.0"
+APP_COPYRIGHT = "Copyright 2025 MonoGuard"
 
 # File paths
 STORAGE_DIR = "storage"
@@ -22,11 +20,10 @@ MAX_HISTORY_ENTRIES = 20
 # Default browser settings
 DEFAULT_HOME_URL = "http://www.google.com"
 DEFAULT_PROTOCOL = "http"
-COMPANY_URL = "https://htoukour.co.za"
 SEARCH_ENGINE_URL = "https://duckduckgo.com/?q={}"
 
 # Window settings
-WINDOW_TITLE = "Mozart"
+WINDOW_TITLE = APP_NAME
 TOOLBAR_ICON_SIZE = (16, 16)
 ABOUT_TITLE_FONT_SIZE = 20
 
