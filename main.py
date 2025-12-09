@@ -49,6 +49,8 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
+        self.config = self.load_config()
+        self.history_enabled = self.config.get("history_enabled", False)
         self.history = self.load_history()
         self.bookmarks = self.load_bookmarks()
 
@@ -100,6 +102,14 @@ class MainWindow(QMainWindow):
         self.bookmark_btn.setStatusTip("Add/Remove bookmark")
         self.bookmark_btn.clicked.connect(self.toggle_bookmark)
         navtb.addWidget(self.bookmark_btn)
+        
+        self.history_toggle_btn = QPushButton()
+        self.history_toggle_btn.setMaximumWidth(80)
+        self.history_toggle_btn.setCheckable(True)
+        self.history_toggle_btn.setChecked(self.history_enabled)
+        self.update_history_toggle_button()
+        self.history_toggle_btn.clicked.connect(self.toggle_history)
+        navtb.addWidget(self.history_toggle_btn)
 
         # Uncomment to disable native menubar on Mac
         # self.menuBar().setNativeMenuBar(False)
@@ -286,6 +296,24 @@ class MainWindow(QMainWindow):
         else:
             self.status_title.setText("Failed to load")
 
+    def load_config(self):
+        """Load configuration from JSON file"""
+        try:
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Error loading config: {e}")
+        return {}
+
+    def save_config(self):
+        """Save configuration to JSON file"""
+        try:
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving config: {e}")
+
     def load_history(self):
         """Load browsing history from JSON file"""
         try:
@@ -306,6 +334,9 @@ class MainWindow(QMainWindow):
 
     def add_to_history(self, url, title):
         """Add a URL to browsing history (keeps last 20 entries)"""
+        if not self.history_enabled:
+            return
+            
         if not url or url == "about:blank":
             return
         
@@ -327,6 +358,22 @@ class MainWindow(QMainWindow):
         
         self.save_history()
         self.update_history_menu()
+
+    def toggle_history(self):
+        """Toggle history tracking on/off"""
+        self.history_enabled = self.history_toggle_btn.isChecked()
+        self.config["history_enabled"] = self.history_enabled
+        self.save_config()
+        self.update_history_toggle_button()
+
+    def update_history_toggle_button(self):
+        """Update history toggle button appearance"""
+        if self.history_enabled:
+            self.history_toggle_btn.setText("History ON")
+            self.history_toggle_btn.setStatusTip("Click to disable history tracking")
+        else:
+            self.history_toggle_btn.setText("History OFF")
+            self.history_toggle_btn.setStatusTip("Click to enable history tracking")
 
     def update_history_menu(self):
         """Update the History menu with recent entries"""
