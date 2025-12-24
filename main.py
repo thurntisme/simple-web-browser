@@ -7,12 +7,16 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from constants import APP_NAME
 from browser_window import MainWindow
+import styles
 
 
 def main():
     """Main application entry point"""
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+    
+    # Apply minimal light theme by default
+    styles.apply_theme(app, "light")
 
     window = MainWindow()
     

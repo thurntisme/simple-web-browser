@@ -3,6 +3,7 @@ UI helper functions for main window
 """
 from PyQt5.QtWidgets import QAction, QInputDialog, QLineEdit, QMessageBox
 from PyQt5.QtCore import QUrl
+import styles
 
 
 def update_history_menu(window):
@@ -82,12 +83,17 @@ def update_bookmark_button(window):
     browser = window.get_current_browser()
     if browser:
         url = browser.url().toString()
-        if window.bookmark_manager.is_bookmarked(url):
+        is_bookmarked = window.bookmark_manager.is_bookmarked(url)
+        
+        if is_bookmarked:
             window.bookmark_btn.setText("★")  # Filled star
             window.bookmark_btn.setStatusTip("Remove bookmark")
         else:
             window.bookmark_btn.setText("☆")  # Empty star
             window.bookmark_btn.setStatusTip("Add bookmark")
+        
+        # Apply modern styling
+        window.bookmark_btn.setStyleSheet(styles.get_bookmark_button_style(is_bookmarked))
 
 
 def toggle_bookmark(window):
@@ -200,12 +206,17 @@ def navigate_to_url_helper(window, url):
 
 def update_history_toggle_button(window):
     """Update history toggle button appearance"""
-    if window.history_manager.enabled:
+    enabled = window.history_manager.enabled
+    
+    if enabled:
         window.history_toggle_btn.setText("History ON")
         window.history_toggle_btn.setStatusTip("Click to disable history tracking")
     else:
         window.history_toggle_btn.setText("History OFF")
         window.history_toggle_btn.setStatusTip("Click to enable history tracking")
+    
+    # Apply modern styling
+    window.history_toggle_btn.setStyleSheet(styles.get_history_button_style(enabled))
 
 
 def toggle_history(window):

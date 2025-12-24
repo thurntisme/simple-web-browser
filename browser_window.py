@@ -16,6 +16,7 @@ from bookmark_manager import BookmarkManager
 from config_manager import ConfigManager
 from session_tracker import SessionTracker
 import ui_helpers
+import styles
 
 from dialogs import AboutDialog, BrowserSettingsDialog
 from tab_manager import TabManager
@@ -73,12 +74,9 @@ class MainWindow(QMainWindow):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
         
-        # Status bar widgets
+        # Status bar widgets with modern styling
         self.status_profile = QLabel()
-        self.status_profile.setStyleSheet(
-            "QLabel { background-color: #4CAF50; color: white; padding: 3px 8px; "
-            "border-radius: 3px; font-weight: bold; }"
-        )
+        self.status_profile.setStyleSheet(styles.get_profile_label_style())
         self.status_profile.setMinimumWidth(80)
         self.status_profile.setText(f"Profile: {self.profile_manager.current_profile}")
         self.status.addWidget(self.status_profile)
@@ -121,12 +119,14 @@ class MainWindow(QMainWindow):
         
         # Open with browser dropdown button
         self.open_with_btn = QPushButton("🌐")
+        self.open_with_btn.setObjectName("openWithBtn")
         self.open_with_btn.setMaximumWidth(35)
         self.open_with_btn.setStatusTip("Open in external browser")
         navtb.addWidget(self.open_with_btn)
         
         # Bookmark button
         self.bookmark_btn = QPushButton("☆")
+        self.bookmark_btn.setObjectName("bookmarkBtn")
         self.bookmark_btn.setMaximumWidth(30)
         self.bookmark_btn.setStatusTip("Add/Remove bookmark")
         self.bookmark_btn.clicked.connect(lambda: ui_helpers.toggle_bookmark(self))
@@ -137,6 +137,8 @@ class MainWindow(QMainWindow):
         self.history_toggle_btn.setMaximumWidth(80)
         self.history_toggle_btn.setCheckable(True)
         self.history_toggle_btn.setChecked(self.history_manager.enabled)
+        # Apply initial styling
+        self.history_toggle_btn.setStyleSheet(styles.get_history_button_style(self.history_manager.enabled))
         ui_helpers.update_history_toggle_button(self)
         self.history_toggle_btn.clicked.connect(lambda: ui_helpers.toggle_history(self))
         navtb.addWidget(self.history_toggle_btn)
@@ -153,11 +155,21 @@ class MainWindow(QMainWindow):
 
         # Tools menu
         tools_menu = self.menuBar().addMenu("&Tools")
+        
         dev_tools_action = QAction("Toggle Dev Tools", self)
         dev_tools_action.setShortcut("F12")
         dev_tools_action.setStatusTip("Show/Hide Developer Tools")
         dev_tools_action.triggered.connect(self.toggle_current_dev_tools)
         tools_menu.addAction(dev_tools_action)
+        
+        tools_menu.addSeparator()
+        
+        # Theme toggle action
+        theme_action = QAction("Toggle Theme (Dark/Light)", self)
+        theme_action.setShortcut("Ctrl+T")
+        theme_action.setStatusTip("Switch between dark and light themes")
+        theme_action.triggered.connect(self.toggle_theme)
+        tools_menu.addAction(theme_action)
 
         # Profile menu
         self.profile_menu = self.menuBar().addMenu("&Profile")
@@ -217,6 +229,23 @@ class MainWindow(QMainWindow):
     def toggle_current_dev_tools(self):
         """Toggle dev tools for current tab"""
         self.tab_manager.toggle_current_dev_tools()
+    
+    def toggle_theme(self):
+        """Toggle between light and dark themes"""
+        from PyQt5.QtWidgets import QApplication
+        app = QApplication.instance()
+        new_theme = styles.toggle_theme(app)
+        
+        # Update button styles to match new theme
+        ui_helpers.update_history_toggle_button(self)
+        ui_helpers.update_bookmark_button(self)
+        
+        # Update profile label style
+        self.status_profile.setStyleSheet(styles.get_profile_label_style())
+        
+        # Show notification
+        theme_name = "Light" if new_theme == "light" else "Dark"
+        self.status_info.setText(f"Switched to {theme_name} theme")
     
     def get_current_browser(self):
         """Get current browser view"""
