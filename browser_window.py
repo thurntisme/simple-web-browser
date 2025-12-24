@@ -15,6 +15,8 @@ from history_manager import HistoryManager
 from bookmark_manager import BookmarkManager
 from config_manager import ConfigManager
 from session_tracker import SessionTracker
+from clipboard_manager import ClipboardManager
+from clipboard_dialog import ClipboardHistoryDialog
 import ui_helpers
 import styles
 
@@ -47,6 +49,9 @@ class MainWindow(QMainWindow):
         self.bookmark_manager = BookmarkManager(self.profile_manager)
         self.bookmark_manager.load()
         
+        self.clipboard_manager = ClipboardManager(self.profile_manager)
+        self.clipboard_dialog = None  # Will be created when needed
+        
         self.session_tracker = SessionTracker(self.profile_manager)
 
         # Initialize UI components
@@ -58,6 +63,9 @@ class MainWindow(QMainWindow):
         # Initialize managers that depend on UI
         self.tab_manager = TabManager(self)
         self.navigation_manager = NavigationManager(self)
+        
+        # Connect clipboard manager signals
+        self.clipboard_manager.clipboard_changed.connect(self.on_clipboard_changed)
         
         # Load initial page
         self.load_initial_page()
@@ -193,6 +201,15 @@ class MainWindow(QMainWindow):
         theme_action.setStatusTip("Switch between dark and light themes")
         theme_action.triggered.connect(self.toggle_theme)
         tools_menu.addAction(theme_action)
+        
+        tools_menu.addSeparator()
+        
+        # Clipboard Manager action
+        clipboard_action = QAction("📋 Clipboard Manager", self)
+        clipboard_action.setShortcut("Ctrl+Shift+V")
+        clipboard_action.setStatusTip("Open clipboard history manager")
+        clipboard_action.triggered.connect(self.show_clipboard_manager)
+        tools_menu.addAction(clipboard_action)
 
         # Profile menu
         self.profile_menu = self.menuBar().addMenu("👤 &Profile")
@@ -389,6 +406,30 @@ class MainWindow(QMainWindow):
             self.tabs.removeTab(self.api_tab_index)
             self.api_tab_widget = None
             self.api_tab_index = None
+    
+    def show_clipboard_manager(self):
+        """Show clipboard manager dialog"""
+        if self.clipboard_dialog is None or not self.clipboard_dialog.isVisible():
+            self.clipboard_dialog = ClipboardHistoryDialog(self.clipboard_manager, self)
+            self.clipboard_dialog.show()
+        else:
+            # Bring existing dialog to front
+            self.clipboard_dialog.raise_()
+            self.clipboard_dialog.activateWindow()
+    
+    def on_clipboard_changed(self, content):
+        """Handle clipboard content change"""
+        # Show brief notification in status
+        preview = content[:30] + "..." if len(content) > 30 else content
+        self.status_info.setText(f"📋 Copied: {preview}")
+        
+        # Reset after 3 seconds
+        QTimer.singleShot(3000, self.reset_clipboard_status)
+    
+    def reset_clipboard_status(self):
+        """Reset clipboard status"""
+        if "📋 Copied:" in self.status_info.text():
+            self.status_info.setText("")
     
     def get_current_browser(self):
         """Get current browser view"""
