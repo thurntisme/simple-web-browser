@@ -94,18 +94,18 @@ class MainWindow(QMainWindow):
         self.status.addPermanentWidget(self.status_info)
 
     def setup_toolbar(self):
-        """Setup navigation toolbar"""
+        """Setup navigation toolbar with icons"""
         navtb = QToolBar("Navigation")
         self.addToolBar(navtb)
 
-        # Home button
-        home_btn = QAction("Home", self)
+        # Home button with emoji icon
+        home_btn = QAction("🏠 Home", self)
         home_btn.setStatusTip("Go home")
         home_btn.triggered.connect(self.navigate_home)
         navtb.addAction(home_btn)
 
-        # Reload button
-        reload_btn = QAction("Reload", self)
+        # Reload button with emoji icon
+        reload_btn = QAction("🔄 Reload", self)
         reload_btn.setStatusTip("Reload page")
         reload_btn.triggered.connect(self.reload_page)
         navtb.addAction(reload_btn)
@@ -114,6 +114,7 @@ class MainWindow(QMainWindow):
 
         # URL bar
         self.urlbar = QLineEdit()
+        self.urlbar.setPlaceholderText("Enter URL or search...")
         self.urlbar.returnPressed.connect(self.navigate_to_url)
         navtb.addWidget(self.urlbar)
         
@@ -134,7 +135,9 @@ class MainWindow(QMainWindow):
         
         # History toggle button
         self.history_toggle_btn = QPushButton()
-        self.history_toggle_btn.setMaximumWidth(80)
+        self.history_toggle_btn.setMaximumWidth(100)  # Increased width for icon
+        self.history_toggle_btn.setMinimumHeight(32)  # Set minimum height
+        self.history_toggle_btn.setMaximumHeight(32)  # Set maximum height
         self.history_toggle_btn.setCheckable(True)
         self.history_toggle_btn.setChecked(self.history_manager.enabled)
         # Apply initial styling
@@ -144,19 +147,19 @@ class MainWindow(QMainWindow):
         navtb.addWidget(self.history_toggle_btn)
 
     def setup_menus(self):
-        """Setup application menus"""
+        """Setup application menus with icons"""
         # Bookmarks menu
-        self.bookmarks_menu = self.menuBar().addMenu("&Bookmarks")
+        self.bookmarks_menu = self.menuBar().addMenu("📚 &Bookmarks")
         ui_helpers.update_bookmarks_menu(self)
 
         # History menu
-        self.history_menu = self.menuBar().addMenu("&History")
+        self.history_menu = self.menuBar().addMenu("📜 &History")
         ui_helpers.update_history_menu(self)
 
         # Tools menu
-        tools_menu = self.menuBar().addMenu("&Tools")
+        tools_menu = self.menuBar().addMenu("🔧 &Tools")
         
-        dev_tools_action = QAction("Toggle Dev Tools", self)
+        dev_tools_action = QAction("🔍 Toggle Dev Tools", self)
         dev_tools_action.setShortcut("F12")
         dev_tools_action.setStatusTip("Show/Hide Developer Tools")
         dev_tools_action.triggered.connect(self.toggle_current_dev_tools)
@@ -165,18 +168,18 @@ class MainWindow(QMainWindow):
         tools_menu.addSeparator()
         
         # Theme toggle action
-        theme_action = QAction("Toggle Theme (Dark/Light)", self)
+        theme_action = QAction("🎨 Toggle Theme (Dark/Light)", self)
         theme_action.setShortcut("Ctrl+T")
         theme_action.setStatusTip("Switch between dark and light themes")
         theme_action.triggered.connect(self.toggle_theme)
         tools_menu.addAction(theme_action)
 
         # Profile menu
-        self.profile_menu = self.menuBar().addMenu("&Profile")
+        self.profile_menu = self.menuBar().addMenu("👤 &Profile")
         ui_helpers.update_profile_menu(self)
 
         # Help menu
-        help_menu = self.menuBar().addMenu("&Help")
+        help_menu = self.menuBar().addMenu("❓ &Help")
         about_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_ABOUT)), f"About {APP_NAME}", self)
         about_action.setStatusTip(f"Find out more about {APP_NAME}")
         about_action.triggered.connect(self.about)
@@ -184,12 +187,12 @@ class MainWindow(QMainWindow):
 
         help_menu.addSeparator()
 
-        settings_action = QAction("Browser Settings", self)
+        settings_action = QAction("⚙️ Browser Settings", self)
         settings_action.setStatusTip("Configure browser settings")
         settings_action.triggered.connect(self.show_browser_settings)
         help_menu.addAction(settings_action)
 
-        reset_action = QAction("Reset to Default", self)
+        reset_action = QAction("🔄 Reset to Default", self)
         reset_action.setStatusTip("Clear all profile data (history, bookmarks, config)")
         reset_action.triggered.connect(self.reset_profile)
         help_menu.addAction(reset_action)

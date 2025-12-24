@@ -10,7 +10,7 @@ def update_history_menu(window):
     """Update the History menu with recent entries"""
     window.history_menu.clear()
     
-    clear_action = QAction("Clear History", window)
+    clear_action = QAction("🗑️ Clear History", window)
     clear_action.triggered.connect(lambda: clear_history(window))
     window.history_menu.addAction(clear_action)
     
@@ -27,12 +27,12 @@ def update_history_menu(window):
             if len(title) > 50:
                 title = title[:47] + "..."
             
-            action = QAction(title, window)
+            action = QAction(f"🌐 {title}", window)
             action.setStatusTip(url)
             action.triggered.connect(lambda checked, u=url: navigate_to_url_helper(window, u))
             window.history_menu.addAction(action)
     else:
-        empty_action = QAction("No history", window)
+        empty_action = QAction("📭 No history", window)
         empty_action.setEnabled(False)
         window.history_menu.addAction(empty_action)
 
@@ -47,12 +47,12 @@ def update_bookmarks_menu(window):
     """Update the Bookmarks menu"""
     window.bookmarks_menu.clear()
     
-    add_action = QAction("Add Bookmark...", window)
+    add_action = QAction("➕ Add Bookmark...", window)
     add_action.setShortcut("Ctrl+D")
     add_action.triggered.connect(lambda: toggle_bookmark(window))
     window.bookmarks_menu.addAction(add_action)
     
-    manage_action = QAction("Manage Bookmarks...", window)
+    manage_action = QAction("📝 Manage Bookmarks...", window)
     manage_action.triggered.connect(lambda: manage_bookmarks(window))
     window.bookmarks_menu.addAction(manage_action)
     
@@ -68,12 +68,12 @@ def update_bookmarks_menu(window):
             if len(title) > 50:
                 title = title[:47] + "..."
             
-            action = QAction(title, window)
+            action = QAction(f"⭐ {title}", window)
             action.setStatusTip(url)
             action.triggered.connect(lambda checked, u=url: navigate_to_url_helper(window, u))
             window.bookmarks_menu.addAction(action)
     else:
-        empty_action = QAction("No bookmarks", window)
+        empty_action = QAction("📭 No bookmarks", window)
         empty_action.setEnabled(False)
         window.bookmarks_menu.addAction(empty_action)
 
@@ -139,14 +139,14 @@ def update_profile_menu(window):
     window.profile_menu.clear()
     
     # Current profile label
-    current_label = QAction(f"Current: {window.profile_manager.current_profile}", window)
+    current_label = QAction(f"👤 Current: {window.profile_manager.current_profile}", window)
     current_label.setEnabled(False)
     window.profile_menu.addAction(current_label)
     
     window.profile_menu.addSeparator()
     
     # New profile action
-    new_profile_action = QAction("New Profile...", window)
+    new_profile_action = QAction("➕ New Profile...", window)
     new_profile_action.triggered.connect(lambda: create_new_profile(window))
     window.profile_menu.addAction(new_profile_action)
     
@@ -155,7 +155,7 @@ def update_profile_menu(window):
     # List available profiles
     profiles = window.profile_manager.get_available_profiles()
     for profile in profiles:
-        action = QAction(profile, window)
+        action = QAction(f"👤 {profile}", window)
         if profile == window.profile_manager.current_profile:
             action.setEnabled(False)
         else:
@@ -209,10 +209,10 @@ def update_history_toggle_button(window):
     enabled = window.history_manager.enabled
     
     if enabled:
-        window.history_toggle_btn.setText("History ON")
+        window.history_toggle_btn.setText("📜 History ON")
         window.history_toggle_btn.setStatusTip("Click to disable history tracking")
     else:
-        window.history_toggle_btn.setText("History OFF")
+        window.history_toggle_btn.setText("📜 History OFF")
         window.history_toggle_btn.setStatusTip("Click to enable history tracking")
     
     # Apply modern styling

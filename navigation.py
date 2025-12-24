@@ -84,14 +84,14 @@ class NavigationManager:
         
         if browsers:
             for browser_name, browser_path in browsers.items():
-                action = QAction(browser_name, self.main_window)
+                action = QAction(f"🌐 {browser_name}", self.main_window)
                 action.triggered.connect(
                     lambda checked, name=browser_name, path=browser_path: 
                     self.open_current_url_in_browser(path)
                 )
                 menu.addAction(action)
         else:
-            no_browser_action = QAction("No browsers found", self.main_window)
+            no_browser_action = QAction("❌ No browsers found", self.main_window)
             no_browser_action.setEnabled(False)
             menu.addAction(no_browser_action)
         

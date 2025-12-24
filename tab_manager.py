@@ -103,9 +103,9 @@ class TabManager:
         
         # Add dev tools toggle action
         if splitter.dev_tools_visible:
-            dev_tools_action = QAction("Hide Dev Tools", self.main_window)
+            dev_tools_action = QAction("🔍 Hide Dev Tools", self.main_window)
         else:
-            dev_tools_action = QAction("Inspect Element (Dev Tools)", self.main_window)
+            dev_tools_action = QAction("🔍 Inspect Element (Dev Tools)", self.main_window)
         
         dev_tools_action.triggered.connect(lambda: self.toggle_dev_tools(splitter))
         menu.addAction(dev_tools_action)
@@ -115,12 +115,12 @@ class TabManager:
         # Add "Open with" submenu
         current_url = browser.url().toString()
         if current_url and current_url != "about:blank":
-            open_with_menu = menu.addMenu("Open with")
+            open_with_menu = menu.addMenu("🌐 Open with")
             
             # Detect available browsers
             browsers = browser_utils.get_available_browsers()
             for browser_name, browser_path in browsers.items():
-                action = QAction(browser_name, self.main_window)
+                action = QAction(f"🌐 {browser_name}", self.main_window)
                 action.triggered.connect(
                     lambda checked, url=current_url, path=browser_path: 
                     browser_utils.open_in_external_browser(url, path, self.main_window)
@@ -128,7 +128,7 @@ class TabManager:
                 open_with_menu.addAction(action)
             
             if not browsers:
-                no_browser_action = QAction("No browsers found", self.main_window)
+                no_browser_action = QAction("❌ No browsers found", self.main_window)
                 no_browser_action.setEnabled(False)
                 open_with_menu.addAction(no_browser_action)
         
