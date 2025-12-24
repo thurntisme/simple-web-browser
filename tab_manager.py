@@ -86,10 +86,20 @@ class TabManager:
     def current_tab_changed(self, i):
         """Handle tab change event"""
         browser = self.get_current_browser()
-        if browser:
+        if browser and hasattr(browser, 'url'):
+            # This is a web browser tab
             qurl = browser.url()
             self.main_window.update_urlbar(qurl, browser)
             self.main_window.update_title(browser)
+        else:
+            # This might be an API tab or other non-browser tab
+            current_widget = self.tabs.currentWidget()
+            if current_widget and hasattr(self.main_window, 'api_tab_widget') and current_widget == self.main_window.api_tab_widget:
+                # This is the API tab
+                self.main_window.urlbar.setText("API Testing Mode")
+                self.main_window.setWindowTitle(f"API Tester - {APP_NAME}")
+                self.main_window.status_title.setText("API Testing Mode")
+                self.main_window.status_info.setText("Ready for API testing")
 
     def close_current_tab(self, i):
         """Close tab if more than minimum tabs exist"""

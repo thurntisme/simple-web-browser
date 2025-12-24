@@ -34,6 +34,12 @@ class MainWindow(QMainWindow):
         self.config_manager = ConfigManager(self.profile_manager)
         self.config_manager.load()
         
+        # API mode state
+        self.api_mode_enabled = False
+        self.api_tab_widget = None
+        self.api_tab_index = None
+        self.stored_web_tabs = []  # Store web tabs when in API mode
+        
         self.history_manager = HistoryManager(self.profile_manager)
         self.history_manager.enabled = self.config_manager.get("history_enabled", False)
         self.history_manager.load()
@@ -145,6 +151,20 @@ class MainWindow(QMainWindow):
         ui_helpers.update_history_toggle_button(self)
         self.history_toggle_btn.clicked.connect(lambda: ui_helpers.toggle_history(self))
         navtb.addWidget(self.history_toggle_btn)
+        
+        navtb.addSeparator()
+        
+        # API Mode toggle button
+        self.api_mode_btn = QPushButton("🔧 API")
+        self.api_mode_btn.setMaximumWidth(80)
+        self.api_mode_btn.setMinimumHeight(32)
+        self.api_mode_btn.setMaximumHeight(32)
+        self.api_mode_btn.setCheckable(True)
+        self.api_mode_btn.setChecked(False)
+        self.api_mode_btn.setStatusTip("Toggle API testing mode")
+        self.api_mode_btn.setStyleSheet(styles.get_api_mode_button_style(False))
+        self.api_mode_btn.clicked.connect(self.toggle_api_mode)
+        navtb.addWidget(self.api_mode_btn)
 
     def setup_menus(self):
         """Setup application menus with icons"""
@@ -251,12 +271,124 @@ class MainWindow(QMainWindow):
         ui_helpers.update_history_toggle_button(self)
         ui_helpers.update_bookmark_button(self)
         
+        # Update API mode button style
+        self.api_mode_btn.setStyleSheet(styles.get_api_mode_button_style(self.api_mode_enabled))
+        
         # Update profile label style
         self.status_profile.setStyleSheet(styles.get_profile_label_style())
         
         # Show notification
         theme_name = "Light" if new_theme == "light" else "Dark"
         self.status_info.setText(f"Switched to {theme_name} theme")
+    
+    def toggle_api_mode(self):
+        """Toggle API testing mode"""
+        self.api_mode_enabled = self.api_mode_btn.isChecked()
+        
+        # Update button styling
+        self.api_mode_btn.setStyleSheet(styles.get_api_mode_button_style(self.api_mode_enabled))
+        
+        if self.api_mode_enabled:
+            # Switch to API mode
+            self.api_mode_btn.setText("🌐 Web")
+            self.api_mode_btn.setStatusTip("Switch back to web browsing mode")
+            self.status_info.setText("API Mode: Ready for testing")
+            
+            # Store current web tabs and remove them
+            self.store_and_remove_web_tabs()
+            
+            # Add API tab
+            self.add_api_tab()
+        else:
+            # Switch back to web mode
+            self.api_mode_btn.setText("🔧 API")
+            self.api_mode_btn.setStatusTip("Toggle API testing mode")
+            self.status_info.setText("Web Mode: Ready for browsing")
+            
+            # Remove API tab and restore web tabs
+            self.remove_api_tabs()
+            self.restore_web_tabs()
+    
+    def store_and_remove_web_tabs(self):
+        """Store current web tabs and remove them from view"""
+        self.stored_web_tabs = []
+        
+        # Store all current tabs (except API tabs)
+        for i in range(self.tabs.count()):
+            widget = self.tabs.widget(i)
+            tab_text = self.tabs.tabText(i)
+            
+            # Skip if it's already an API tab
+            if hasattr(self, 'api_tab_widget') and widget == self.api_tab_widget:
+                continue
+                
+            # Store tab info
+            tab_info = {
+                'widget': widget,
+                'text': tab_text,
+                'index': i
+            }
+            self.stored_web_tabs.append(tab_info)
+        
+        # Remove all tabs (they'll be restored later)
+        while self.tabs.count() > 0:
+            widget = self.tabs.widget(0)
+            if hasattr(self, 'api_tab_widget') and widget == self.api_tab_widget:
+                break
+            self.tabs.removeTab(0)
+    
+    def restore_web_tabs(self):
+        """Restore previously stored web tabs"""
+        if not self.stored_web_tabs:
+            # If no stored tabs, create a default one
+            self.add_new_tab()
+            return
+            
+        # Restore all stored tabs
+        for tab_info in self.stored_web_tabs:
+            widget = tab_info['widget']
+            text = tab_info['text']
+            self.tabs.addTab(widget, text)
+        
+        # Switch to first tab
+        if self.tabs.count() > 0:
+            self.tabs.setCurrentIndex(0)
+            self.current_tab_changed(0)
+        
+        # Clear stored tabs
+        self.stored_web_tabs = []
+    
+    def add_api_tab(self):
+        """Add a new API testing tab"""
+        # Create API interface widget
+        api_widget = QWidget()
+        layout = QVBoxLayout(api_widget)
+        
+        # Placeholder content
+        label = QLabel("🔧 API Testing Mode")
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 50px;")
+        layout.addWidget(label)
+        
+        info_label = QLabel("API testing interface will be implemented here.\nFeatures coming soon:\n• HTTP Methods (GET, POST, PUT, DELETE)\n• Request/Response viewer\n• Headers and parameters\n• Collections and history")
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setStyleSheet("font-size: 14px; color: #666; line-height: 1.5;")
+        layout.addWidget(info_label)
+        
+        # Add the API tab
+        tab_index = self.tabs.addTab(api_widget, "🔧 API Tester")
+        self.tabs.setCurrentIndex(tab_index)
+        
+        # Store reference to API tab
+        self.api_tab_widget = api_widget
+        self.api_tab_index = tab_index
+    
+    def remove_api_tabs(self):
+        """Remove API testing tabs"""
+        if hasattr(self, 'api_tab_index') and self.api_tab_index is not None:
+            self.tabs.removeTab(self.api_tab_index)
+            self.api_tab_widget = None
+            self.api_tab_index = None
     
     def get_current_browser(self):
         """Get current browser view"""

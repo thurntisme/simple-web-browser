@@ -569,6 +569,73 @@ def get_bookmark_button_style(is_bookmarked):
     else:
         return BOOKMARK_BUTTON_ACTIVE_STYLE if is_bookmarked else BOOKMARK_BUTTON_INACTIVE_STYLE
 
+
+def get_api_mode_button_style(api_mode_enabled):
+    """Get API mode button style based on state"""
+    if current_theme == "light":
+        if api_mode_enabled:
+            return f"""
+            QPushButton {{
+                background-color: #e74c3c;
+                border: 1px solid #e74c3c;
+                color: white;
+                font-weight: bold;
+                padding: 6px 10px;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: #c0392b;
+                border: 1px solid #c0392b;
+            }}
+            """
+        else:
+            return f"""
+            QPushButton {{
+                background-color: {LIGHT_COLORS['surface']};
+                border: 1px solid {LIGHT_COLORS['border']};
+                color: {LIGHT_COLORS['text_secondary']};
+                font-weight: normal;
+                padding: 6px 10px;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: {LIGHT_COLORS['hover']};
+                border: 1px solid {LIGHT_COLORS['text_secondary']};
+            }}
+            """
+    else:
+        # Dark theme styles
+        if api_mode_enabled:
+            return """
+            QPushButton {
+                background-color: #e74c3c;
+                border: 1px solid #e74c3c;
+                color: white;
+                font-weight: bold;
+                padding: 6px 10px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+                border: 1px solid #c0392b;
+            }
+            """
+        else:
+            return """
+            QPushButton {
+                background-color: #2c3e50;
+                border: 1px solid #34495e;
+                color: #bdc3c7;
+                font-weight: normal;
+                padding: 6px 10px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #34495e;
+                border: 1px solid #7f8c8d;
+            }
+            """
+
 # Light theme color palette - Minimal design with only white, black, and gray
 LIGHT_COLORS = {
     'primary': '#FFFFFF',           # Pure white
