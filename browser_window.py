@@ -180,7 +180,7 @@ class MainWindow(QMainWindow):
 
         # Help menu
         help_menu = self.menuBar().addMenu("❓ &Help")
-        about_action = QAction(QIcon(os.path.join(IMAGES_DIR, ICON_ABOUT)), f"About {APP_NAME}", self)
+        about_action = QAction("ℹ️ About " + APP_NAME, self)
         about_action.setStatusTip(f"Find out more about {APP_NAME}")
         about_action.triggered.connect(self.about)
         help_menu.addAction(about_action)
@@ -196,6 +196,14 @@ class MainWindow(QMainWindow):
         reset_action.setStatusTip("Clear all profile data (history, bookmarks, config)")
         reset_action.triggered.connect(self.reset_profile)
         help_menu.addAction(reset_action)
+
+        help_menu.addSeparator()
+
+        quit_action = QAction("🚪 Quit App", self)
+        quit_action.setShortcut("Ctrl+Q")
+        quit_action.setStatusTip("Exit the application")
+        quit_action.triggered.connect(self.quit_application)
+        help_menu.addAction(quit_action)
 
     def load_initial_page(self):
         """Load home page (welcome or custom URL)"""
@@ -394,11 +402,40 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Reset Complete", 
                                    f"Profile '{self.profile_manager.current_profile}' has been reset to default.")
 
+    def quit_application(self):
+        """Quit the application with confirmation"""
+        reply = QMessageBox.question(
+            self,
+            "Quit Application",
+            f"Are you sure you want to quit {APP_NAME}?\n\n"
+            "All open tabs will be closed and your session will end.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # End session and save data
+            self.session_tracker.end_session()
+            # Close the application
+            QApplication.instance().quit()
+
     def closeEvent(self, event):
-        """Handle application closing"""
-        # End session and save data
-        self.session_tracker.end_session()
-        event.accept()
+        """Handle application closing with confirmation"""
+        reply = QMessageBox.question(
+            self,
+            "Quit Application",
+            f"Are you sure you want to quit {APP_NAME}?\n\n"
+            "All open tabs will be closed and your session will end.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # End session and save data
+            self.session_tracker.end_session()
+            event.accept()
+        else:
+            event.ignore()
     
     def setup_initial_tab(self):
         """Setup the initial tab after managers are initialized"""
