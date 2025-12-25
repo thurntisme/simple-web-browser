@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ad Blocker Test Page</title>
+    
+    <!-- Simulated ad scripts -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+    <script src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script src="https://connect.facebook.net/en_US/fbevents.js"></script>
+    <script src="https://static.criteo.net/js/ld/ld.js"></script>
+    
+    <style>
+        /* Simulated ad styles */
+        .ad-banner {
+            width: 728px;
+            height: 90px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px auto;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .sidebar-ad {
+            width: 300px;
+            height: 250px;
+            background: linear-gradient(45deg, #a8e6cf, #ffd93d);
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px;
+            color: #333;
+            font-weight: bold;
+        }
+        
+        .popup-ad {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 300px;
+            background: linear-gradient(45deg, #ff9a9e, #fecfef);
+            border: 3px solid #ff6b6b;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            font-weight: bold;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        
+        .sponsored-content {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .content-area {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .main-content {
+            flex: 1;
+        }
+        
+        .sidebar {
+            width: 320px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚫 Ad Blocker Test Page</h1>
+        
+        <div style="background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3>🧪 How to Test the Ad Blocker:</h3>
+            <ol>
+                <li>Right-click anywhere on this page</li>
+                <li><strong>Scan & Remove:</strong> Select "🚫 Scan & Remove Ads" to detect and remove all ads</li>
+                <li><strong>Analysis Only:</strong> Select "📊 Ad Analysis Report" to analyze without removing</li>
+                <li>Compare the page before and after ad removal</li>
+            </ol>
+            <p><strong>This page contains:</strong></p>
+            <ul>
+                <li>🎯 Banner ads (728x90)</li>
+                <li>📱 Sidebar ads (300x250)</li>
+                <li>🪟 Popup/overlay ads</li>
+                <li>📊 Tracking scripts (Google Analytics, Facebook Pixel, etc.)</li>
+                <li>🎪 Sponsored content sections</li>
+                <li>🖼️ Ad network iframes and images</li>
+            </ul>
+        </div>
+        
+        <!-- Header Banner Ad -->
+        <div class="ad-banner advertisement" id="header-ad">
+            📢 HEADER BANNER AD - 728x90
+        </div>
+        
+        <div class="content-area">
+            <div class="main-content">
+                <h2>Main Content Area</h2>
+                <p>This is the main content of the page. The ad blocker should preserve this content while removing the advertisements around it.</p>
+                
+                <!-- Sponsored Content -->
+                <div class="sponsored-content sponsored">
+                    <h4>🎪 Sponsored Content</h4>
+                    <p>This is a sponsored article or promoted content that should be detected and removed by the ad blocker.</p>
+                    <button>Learn More - Special Offer!</button>
+                </div>
+                
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+                
+                <!-- Google AdSense Placeholder -->
+                <div class="adsbygoogle" style="display:block; width:728px; height:90px; background:#f0f0f0; margin:20px auto; text-align:center; line-height:90px; border:1px solid #ccc;">
+                    Google AdSense Ad Placeholder
+                </div>
+                
+                <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+                
+                <!-- Outbrain/Taboola Style Content -->
+                <div class="promoted native-ad" style="border:1px solid #ddd; padding:15px; margin:20px 0;">
+                    <h4>You May Also Like (Promoted)</h4>
+                    <div style="display:flex; gap:15px;">
+                        <div style="flex:1; text-align:center;">
+                            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2RkZCIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QWQgSW1hZ2U8L3RleHQ+PC9zdmc+" alt="Sponsored Image" style="width:100px; height:100px;">
+                            <p>Amazing Product - 50% Off!</p>
+                        </div>
+                        <div style="flex:1; text-align:center;">
+                            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2RkZCIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QWQgSW1hZ2U8L3RleHQ+PC9zdmc+" alt="Sponsored Image" style="width:100px; height:100px;">
+                            <p>Free Trial - Limited Time!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <h3>Sidebar</h3>
+                
+                <!-- Sidebar Ad 1 -->
+                <div class="sidebar-ad ads" id="sidebar-ad-1">
+                    📱 SIDEBAR AD<br>300x250
+                </div>
+                
+                <!-- Sidebar Ad 2 -->
+                <div class="sidebar-ad advertisement" id="sidebar-ad-2">
+                    🎯 DISPLAY AD<br>300x250
+                </div>
+                
+                <!-- Amazon Associates Style -->
+                <div class="amazon-ads" style="border:1px solid #232f3e; padding:10px; margin:10px 0; background:#f3f3f3;">
+                    <h4>Amazon Recommendations</h4>
+                    <p>Products you might like...</p>
+                    <button style="background:#ff9900; border:none; padding:8px 16px; color:white;">Buy Now</button>
+                </div>
+                
+                <!-- Facebook Ad Style -->
+                <div class="facebook-ads" style="border:1px solid #1877f2; padding:10px; margin:10px 0;">
+                    <h4>Suggested for You</h4>
+                    <p>Sponsored content from Facebook</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer Banner Ad -->
+        <div class="ad-banner" id="footer-ad">
+            📢 FOOTER BANNER AD - 728x90
+        </div>
+        
+        <!-- Popup Ad (appears after delay) -->
+        <div class="popup-ad overlay-ad" id="popup-ad" style="display:none;">
+            <h3>🪟 POPUP AD</h3>
+            <p>Special Offer - Don't Miss Out!</p>
+            <button onclick="closePopup()" style="margin-top:10px; padding:10px 20px;">Close X</button>
+        </div>
+    </div>
+    
+    <!-- Simulated Ad Network Iframes -->
+    <iframe src="data:text/html;base64,PGh0bWw+PGJvZHkgc3R5bGU9ImJhY2tncm91bmQ6I2ZmNjY2NjsgdGV4dC1hbGlnbjpjZW50ZXI7IGNvbG9yOndoaXRlOyBmb250LXdlaWdodDpib2xkOyBkaXNwbGF5OmZsZXg7IGFsaWduLWl0ZW1zOmNlbnRlcjsganVzdGlmeS1jb250ZW50OmNlbnRlcjsgaGVpZ2h0OjEwMCU7Ij5BZCBJZnJhbWU8L2JvZHk+PC9odG1sPg==" 
+            width="160" height="600" style="position:fixed; top:10px; right:10px; border:2px solid #333; z-index:1000;">
+    </iframe>
+    
+    <!-- Tracking Pixels -->
+    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="1" height="1" alt="Tracking Pixel" style="position:absolute; top:0; left:0;">
+    
+    <!-- JavaScript for simulated ad behavior -->
+    <script>
+        // Simulate Google Analytics
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'GA_MEASUREMENT_ID');
+        
+        // Simulate Facebook Pixel
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window,document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', 'YOUR_PIXEL_ID');
+        fbq('track', 'PageView');
+        
+        // Show popup after 3 seconds
+        setTimeout(function() {
+            document.getElementById('popup-ad').style.display = 'flex';
+        }, 3000);
+        
+        function closePopup() {
+            document.getElementById('popup-ad').style.display = 'none';
+        }
+        
+        // Simulate ad loading
+        console.log('🎯 Simulated ads loaded');
+        
+        // Add more ad-like elements dynamically
+        setTimeout(function() {
+            var dynamicAd = document.createElement('div');
+            dynamicAd.className = 'dynamic-ad ads';
+            dynamicAd.style.cssText = 'position:fixed; bottom:0; left:0; right:0; height:100px; background:#ff6b6b; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; z-index:1000;';
+            dynamicAd.innerHTML = '📢 DYNAMIC BOTTOM AD - Click to Remove';
+            dynamicAd.onclick = function() { this.remove(); };
+            document.body.appendChild(dynamicAd);
+        }, 5000);
+    </script>
+    
+    <!-- Simulated Criteo/Outbrain Scripts -->
+    <script>
+        // Criteo simulation
+        window.Criteo = window.Criteo || {};
+        window.Criteo.events = window.Criteo.events || [];
+        
+        // Outbrain simulation  
+        window.OBR = window.OBR || {};
+        window.OBR.extern = window.OBR.extern || {};
+    </script>
+</body>
+</html>

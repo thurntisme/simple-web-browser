@@ -183,6 +183,17 @@ class TabManager:
                 advanced_script_action.triggered.connect(lambda: self.advanced_script_analysis(browser))
                 menu.addAction(advanced_script_action)
                 
+                menu.addSeparator()
+                
+                # Add ad blocker features
+                ad_scanner_action = QAction("🚫 Scan & Remove Ads", self.main_window)
+                ad_scanner_action.triggered.connect(lambda: self.scan_and_remove_ads(browser))
+                menu.addAction(ad_scanner_action)
+                
+                ad_analysis_action = QAction("📊 Ad Analysis Report", self.main_window)
+                ad_analysis_action.triggered.connect(lambda: self.analyze_ads(browser))
+                menu.addAction(ad_analysis_action)
+                
                 # Add page speed analyzer
                 speed_analyzer_action = QAction("⚡ Page Speed Analyzer", self.main_window)
                 speed_analyzer_action.triggered.connect(lambda: self.analyze_page_speed(browser))
@@ -2185,7 +2196,514 @@ class TabManager:
         total_issues = high_severity_count + medium_severity_count + low_severity_count
         self.main_window.status_info.setText(f"🔍 Advanced analysis complete: {total_issues} security issues found")
         QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
-
+    
+    def scan_and_remove_ads(self, browser):
+        """Scan for advertisements and remove them from the page"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🚫 Scanning and removing ads...")
+            
+            # Comprehensive JavaScript for ad detection and removal
+            js_code = """
+            (function() {
+                var adBlocker = {
+                    removed: {
+                        elements: 0,
+                        scripts: 0,
+                        iframes: 0,
+                        images: 0,
+                        divs: 0
+                    },
+                    detected: [],
+                    
+                    // Common ad-related selectors
+                    adSelectors: [
+                        // Generic ad classes and IDs
+                        '[class*="ad-"]', '[class*="ads-"]', '[class*="_ad_"]', '[class*="_ads_"]',
+                        '[id*="ad-"]', '[id*="ads-"]', '[id*="_ad_"]', '[id*="_ads_"]',
+                        '.advertisement', '.ads', '.ad', '.advert', '.adsystem',
+                        '#advertisement', '#ads', '#ad', '#advert',
+                        
+                        // Google Ads
+                        '.google-ads', '.googleads', '.adsbygoogle', 'ins.adsbygoogle',
+                        '[data-ad-client]', '[data-ad-slot]', '.google-ad',
+                        
+                        // Common ad networks
+                        '.doubleclick', '.googlesyndication', '.amazon-ads', '.facebook-ads',
+                        '.outbrain', '.taboola', '.revcontent', '.content-ads',
+                        
+                        // Banner and display ads
+                        '.banner', '.banner-ad', '.display-ad', '.sidebar-ad',
+                        '.header-ad', '.footer-ad', '.popup-ad', '.overlay-ad',
+                        
+                        // Video ads
+                        '.video-ad', '.preroll', '.midroll', '.postroll',
+                        
+                        // Sponsored content
+                        '.sponsored', '.sponsor', '.promoted', '.native-ad',
+                        
+                        // Pop-up and modal ads
+                        '.popup', '.modal-ad', '.overlay', '.interstitial',
+                        
+                        // Social media ads
+                        '[data-testid*="ad"]', '[aria-label*="Sponsored"]',
+                        
+                        // Generic suspicious containers
+                        '[style*="position: fixed"]', '[style*="z-index: 999"]'
+                    ],
+                    
+                    // Ad-related domains and URLs
+                    adDomains: [
+                        'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+                        'amazon-adsystem.com', 'facebook.com/tr', 'google-analytics.com',
+                        'outbrain.com', 'taboola.com', 'revcontent.com', 'criteo.com',
+                        'adsystem.com', 'adscdn.com', 'ads.yahoo.com', 'bing.com/ads',
+                        'scorecardresearch.com', 'quantserve.com', 'addthis.com'
+                    ],
+                    
+                    // Text patterns that indicate ads
+                    adTextPatterns: [
+                        /sponsored/i, /advertisement/i, /promoted/i, /ads by/i,
+                        /buy now/i, /click here/i, /limited time/i, /special offer/i,
+                        /discount/i, /sale/i, /free trial/i, /sign up now/i
+                    ],
+                    
+                    removeElement: function(element, type) {
+                        if (element && element.parentNode) {
+                            var info = {
+                                type: type,
+                                tag: element.tagName,
+                                className: element.className,
+                                id: element.id,
+                                src: element.src || '',
+                                text: element.textContent ? element.textContent.substring(0, 50) : ''
+                            };
+                            
+                            this.detected.push(info);
+                            element.style.display = 'none';
+                            element.remove();
+                            this.removed[type]++;
+                            this.removed.elements++;
+                        }
+                    },
+                    
+                    scanBySelectors: function() {
+                        for (var i = 0; i < this.adSelectors.length; i++) {
+                            try {
+                                var elements = document.querySelectorAll(this.adSelectors[i]);
+                                for (var j = 0; j < elements.length; j++) {
+                                    this.removeElement(elements[j], 'divs');
+                                }
+                            } catch (e) {
+                                // Ignore invalid selectors
+                            }
+                        }
+                    },
+                    
+                    scanScripts: function() {
+                        var scripts = document.getElementsByTagName('script');
+                        for (var i = scripts.length - 1; i >= 0; i--) {
+                            var script = scripts[i];
+                            if (script.src) {
+                                for (var j = 0; j < this.adDomains.length; j++) {
+                                    if (script.src.includes(this.adDomains[j])) {
+                                        this.removeElement(script, 'scripts');
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    
+                    scanIframes: function() {
+                        var iframes = document.getElementsByTagName('iframe');
+                        for (var i = iframes.length - 1; i >= 0; i--) {
+                            var iframe = iframes[i];
+                            if (iframe.src) {
+                                for (var j = 0; j < this.adDomains.length; j++) {
+                                    if (iframe.src.includes(this.adDomains[j])) {
+                                        this.removeElement(iframe, 'iframes');
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Check iframe dimensions (common ad sizes)
+                            var width = iframe.width || iframe.offsetWidth;
+                            var height = iframe.height || iframe.offsetHeight;
+                            
+                            // Common ad sizes: 728x90, 300x250, 160x600, 320x50, etc.
+                            var commonAdSizes = [
+                                [728, 90], [300, 250], [160, 600], [320, 50],
+                                [468, 60], [234, 60], [120, 600], [336, 280],
+                                [970, 250], [300, 600], [320, 100]
+                            ];
+                            
+                            for (var k = 0; k < commonAdSizes.length; k++) {
+                                if (width == commonAdSizes[k][0] && height == commonAdSizes[k][1]) {
+                                    this.removeElement(iframe, 'iframes');
+                                    break;
+                                }
+                            }
+                        }
+                    },
+                    
+                    scanImages: function() {
+                        var images = document.getElementsByTagName('img');
+                        for (var i = images.length - 1; i >= 0; i--) {
+                            var img = images[i];
+                            
+                            // Check image source for ad domains
+                            if (img.src) {
+                                for (var j = 0; j < this.adDomains.length; j++) {
+                                    if (img.src.includes(this.adDomains[j])) {
+                                        this.removeElement(img, 'images');
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Check alt text for ad patterns
+                            if (img.alt) {
+                                for (var k = 0; k < this.adTextPatterns.length; k++) {
+                                    if (this.adTextPatterns[k].test(img.alt)) {
+                                        this.removeElement(img, 'images');
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    
+                    scanByText: function() {
+                        var walker = document.createTreeWalker(
+                            document.body,
+                            NodeFilter.SHOW_ELEMENT,
+                            null,
+                            false
+                        );
+                        
+                        var elementsToRemove = [];
+                        var node;
+                        
+                        while (node = walker.nextNode()) {
+                            var text = node.textContent || '';
+                            
+                            // Skip if element is too large (likely not an ad)
+                            if (text.length > 500) continue;
+                            
+                            for (var i = 0; i < this.adTextPatterns.length; i++) {
+                                if (this.adTextPatterns[i].test(text)) {
+                                    // Check if it's likely an ad container
+                                    if (node.children.length < 5 && text.length < 200) {
+                                        elementsToRemove.push(node);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        for (var j = 0; j < elementsToRemove.length; j++) {
+                            this.removeElement(elementsToRemove[j], 'divs');
+                        }
+                    },
+                    
+                    removePopups: function() {
+                        // Remove fixed position elements that might be popups
+                        var allElements = document.querySelectorAll('*');
+                        for (var i = 0; i < allElements.length; i++) {
+                            var element = allElements[i];
+                            var style = window.getComputedStyle(element);
+                            
+                            if (style.position === 'fixed' && 
+                                (parseInt(style.zIndex) > 1000 || style.zIndex === 'auto')) {
+                                
+                                // Check if it covers a significant portion of the screen
+                                var rect = element.getBoundingClientRect();
+                                var screenArea = window.innerWidth * window.innerHeight;
+                                var elementArea = rect.width * rect.height;
+                                
+                                if (elementArea > screenArea * 0.1) { // More than 10% of screen
+                                    this.removeElement(element, 'divs');
+                                }
+                            }
+                        }
+                    },
+                    
+                    blockFutureAds: function() {
+                        // Override common ad loading functions
+                        if (window.googletag) {
+                            window.googletag.display = function() {};
+                            window.googletag.enableServices = function() {};
+                        }
+                        
+                        // Block Google AdSense
+                        if (window.adsbygoogle) {
+                            window.adsbygoogle = [];
+                        }
+                        
+                        // Override setTimeout and setInterval for ad-related calls
+                        var originalSetTimeout = window.setTimeout;
+                        var originalSetInterval = window.setInterval;
+                        
+                        window.setTimeout = function(func, delay) {
+                            var funcStr = func.toString();
+                            for (var i = 0; i < adBlocker.adDomains.length; i++) {
+                                if (funcStr.includes(adBlocker.adDomains[i])) {
+                                    return; // Block ad-related timeouts
+                                }
+                            }
+                            return originalSetTimeout.apply(this, arguments);
+                        };
+                        
+                        window.setInterval = function(func, delay) {
+                            var funcStr = func.toString();
+                            for (var i = 0; i < adBlocker.adDomains.length; i++) {
+                                if (funcStr.includes(adBlocker.adDomains[i])) {
+                                    return; // Block ad-related intervals
+                                }
+                            }
+                            return originalSetInterval.apply(this, arguments);
+                        };
+                    },
+                    
+                    run: function() {
+                        console.log('🚫 Starting ad removal process...');
+                        
+                        // Run all scanning methods
+                        this.scanBySelectors();
+                        this.scanScripts();
+                        this.scanIframes();
+                        this.scanImages();
+                        this.scanByText();
+                        this.removePopups();
+                        this.blockFutureAds();
+                        
+                        console.log('🚫 Ad removal complete:', this.removed);
+                        
+                        return {
+                            removed: this.removed,
+                            detected: this.detected,
+                            summary: 'Removed ' + this.removed.elements + ' ad elements'
+                        };
+                    }
+                };
+                
+                return adBlocker.run();
+            })();
+            """
+            
+            def process_ad_removal(result):
+                if not result:
+                    self.main_window.status_info.setText("ℹ️ No ads detected on this page")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                removed = result.get('removed', {})
+                total_removed = removed.get('elements', 0)
+                
+                if total_removed > 0:
+                    # Show success message
+                    self.main_window.status_info.setText(f"🚫 Removed {total_removed} ad elements!")
+                    QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+                    
+                    # Show detailed results dialog
+                    self.show_ad_removal_dialog(result, current_url)
+                else:
+                    self.main_window.status_info.setText("✅ No ads found on this page")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+            
+            # Execute JavaScript to remove ads
+            page.runJavaScript(js_code, process_ad_removal)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Ad removal error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_ad_removal_dialog(self, result, base_url):
+        """Show dialog with ad removal results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTreeWidget, QTreeWidgetItem,
+                                   QHeaderView, QGroupBox, QGridLayout, QFileDialog)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        from datetime import datetime
+        
+        removed = result.get('removed', {})
+        detected = result.get('detected', [])
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"🚫 Ad Removal Results - {removed.get('elements', 0)} ads removed")
+        dialog.setMinimumSize(800, 600)
+        dialog.resize(1000, 700)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"Ad Removal Results for: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #e8f5e8; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # Summary statistics
+        summary_group = QGroupBox("📊 Removal Summary")
+        summary_grid = QGridLayout(summary_group)
+        
+        summary_grid.addWidget(QLabel(f"Total Elements Removed: {removed.get('elements', 0)}"), 0, 0)
+        summary_grid.addWidget(QLabel(f"Ad Scripts Blocked: {removed.get('scripts', 0)}"), 0, 1)
+        summary_grid.addWidget(QLabel(f"Ad Iframes Removed: {removed.get('iframes', 0)}"), 1, 0)
+        summary_grid.addWidget(QLabel(f"Ad Images Removed: {removed.get('images', 0)}"), 1, 1)
+        summary_grid.addWidget(QLabel(f"Ad Containers Removed: {removed.get('divs', 0)}"), 2, 0)
+        
+        layout.addWidget(summary_group)
+        
+        # Detailed list of removed elements
+        details_label = QLabel("🗑️ Removed Elements Details:")
+        details_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        layout.addWidget(details_label)
+        
+        details_tree = QTreeWidget()
+        details_tree.setHeaderLabels(['Type', 'Tag', 'Class/ID', 'Source/Text'])
+        details_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        details_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        details_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
+        details_tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
+        
+        for ad in detected:
+            item = QTreeWidgetItem()
+            item.setText(0, ad.get('type', '').title())
+            item.setText(1, ad.get('tag', ''))
+            
+            # Combine class and ID info
+            class_id = []
+            if ad.get('className'):
+                class_id.append(f"class: {ad['className'][:30]}")
+            if ad.get('id'):
+                class_id.append(f"id: {ad['id']}")
+            item.setText(2, ' | '.join(class_id) if class_id else 'none')
+            
+            # Show source or text content
+            content = ad.get('src') or ad.get('text', '')
+            item.setText(3, content[:60] + ('...' if len(content) > 60 else ''))
+            
+            # Color code by type
+            ad_type = ad.get('type', '').lower()
+            if ad_type == 'scripts':
+                item.setBackground(0, QColor(255, 200, 200))
+            elif ad_type == 'iframes':
+                item.setBackground(0, QColor(255, 255, 200))
+            elif ad_type == 'images':
+                item.setBackground(0, QColor(200, 255, 200))
+            else:
+                item.setBackground(0, QColor(200, 200, 255))
+            
+            details_tree.addTopLevelItem(item)
+        
+        layout.addWidget(details_tree)
+        
+        # Recommendations
+        recommendations_text = QTextEdit()
+        recommendations_text.setMaximumHeight(120)
+        recommendations = []
+        
+        if removed.get('elements', 0) > 0:
+            recommendations.append("✅ Successfully removed detected advertisements")
+            recommendations.append("💡 Consider installing a browser extension for permanent ad blocking")
+            recommendations.append("🔄 You can re-run this tool if new ads appear dynamically")
+            
+            if removed.get('scripts', 0) > 0:
+                recommendations.append("⚠️ Some ad scripts were blocked - page functionality should be preserved")
+        else:
+            recommendations.append("🎉 This page appears to be ad-free!")
+            recommendations.append("💡 The site may be using ethical advertising or no ads at all")
+        
+        recommendations_text.setPlainText('\n'.join(recommendations))
+        recommendations_text.setStyleSheet("background-color: #f0f8ff; border: 1px solid #b0d4f1; padding: 5px;")
+        layout.addWidget(recommendations_text)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        export_button = QPushButton("📊 Export Report")
+        refresh_button = QPushButton("🔄 Scan Again")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(refresh_button)
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def export_report():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"ad_removal_report_{timestamp}.txt"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export Ad Removal Report",
+                filename,
+                "Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    report_lines = []
+                    report_lines.append("AD REMOVAL REPORT")
+                    report_lines.append("=" * 50)
+                    report_lines.append(f"URL: {base_url}")
+                    report_lines.append(f"Scan Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    report_lines.append("")
+                    
+                    report_lines.append("REMOVAL SUMMARY")
+                    report_lines.append("-" * 30)
+                    report_lines.append(f"Total Elements Removed: {removed.get('elements', 0)}")
+                    report_lines.append(f"Ad Scripts Blocked: {removed.get('scripts', 0)}")
+                    report_lines.append(f"Ad Iframes Removed: {removed.get('iframes', 0)}")
+                    report_lines.append(f"Ad Images Removed: {removed.get('images', 0)}")
+                    report_lines.append(f"Ad Containers Removed: {removed.get('divs', 0)}")
+                    report_lines.append("")
+                    
+                    if detected:
+                        report_lines.append("DETAILED REMOVAL LIST")
+                        report_lines.append("-" * 30)
+                        for i, ad in enumerate(detected, 1):
+                            report_lines.append(f"{i}. {ad.get('type', '').title()} - {ad.get('tag', '')}")
+                            if ad.get('className'):
+                                report_lines.append(f"   Class: {ad['className']}")
+                            if ad.get('id'):
+                                report_lines.append(f"   ID: {ad['id']}")
+                            if ad.get('src'):
+                                report_lines.append(f"   Source: {ad['src']}")
+                            elif ad.get('text'):
+                                report_lines.append(f"   Text: {ad['text'][:100]}")
+                            report_lines.append("")
+                    
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(report_lines))
+                    
+                    self.main_window.status_info.setText(f"✅ Report exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        def scan_again():
+            dialog.accept()
+            # Re-run the ad removal
+            self.scan_and_remove_ads(browser)
+        
+        # Connect buttons
+        export_button.clicked.connect(export_report)
+        refresh_button.clicked.connect(scan_again)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
+    
     def scan_broken_links(self, browser):
         """Scan the current page for broken links"""
         try:
