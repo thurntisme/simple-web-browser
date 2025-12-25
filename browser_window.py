@@ -17,6 +17,7 @@ from config_manager import ConfigManager
 from session_tracker import SessionTracker
 from clipboard_manager import ClipboardManager
 from clipboard_dialog import ClipboardHistoryDialog
+from ping_tool import PingDialog
 import ui_helpers
 import styles
 
@@ -51,6 +52,7 @@ class MainWindow(QMainWindow):
         
         self.clipboard_manager = ClipboardManager(self.profile_manager)
         self.clipboard_dialog = None  # Will be created when needed
+        self.ping_dialog = None  # Will be created when needed
         
         self.session_tracker = SessionTracker(self.profile_manager)
 
@@ -130,6 +132,8 @@ class MainWindow(QMainWindow):
         self.urlbar = QLineEdit()
         self.urlbar.setPlaceholderText("Enter URL or search...")
         self.urlbar.returnPressed.connect(self.navigate_to_url)
+        self.urlbar.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.urlbar.customContextMenuRequested.connect(self.show_urlbar_context_menu)
         navtb.addWidget(self.urlbar)
         
         # Open with browser dropdown button
@@ -196,6 +200,13 @@ class MainWindow(QMainWindow):
         clipboard_action.setStatusTip("Open clipboard history manager")
         clipboard_action.triggered.connect(self.show_clipboard_manager)
         tools_menu.addAction(clipboard_action)
+        
+        # Ping Tool action
+        ping_action = QAction("🏓 Ping Tool", self)
+        ping_action.setShortcut("Ctrl+P")
+        ping_action.setStatusTip("Test domain/IP connectivity")
+        ping_action.triggered.connect(self.show_ping_tool)
+        tools_menu.addAction(ping_action)
 
         # Profile menu
         self.profile_menu = self.menuBar().addMenu("👤 &Profile")
@@ -526,6 +537,62 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.clipboard_dialog.raise_()
             self.clipboard_dialog.activateWindow()
+    
+    def show_ping_tool(self):
+        """Show ping tool dialog"""
+        if self.ping_dialog is None or not self.ping_dialog.isVisible():
+            self.ping_dialog = PingDialog(self)
+            self.ping_dialog.show()
+        else:
+            # Bring existing dialog to front
+            self.ping_dialog.raise_()
+            self.ping_dialog.activateWindow()
+    
+    def show_urlbar_context_menu(self, position):
+        """Show context menu for URL bar"""
+        menu = QMenu(self)
+        
+        # Standard edit actions
+        if self.urlbar.hasSelectedText():
+            cut_action = menu.addAction("✂️ Cut")
+            cut_action.triggered.connect(self.urlbar.cut)
+            
+            copy_action = menu.addAction("📋 Copy")
+            copy_action.triggered.connect(self.urlbar.copy)
+        
+        paste_action = menu.addAction("📄 Paste")
+        paste_action.triggered.connect(self.urlbar.paste)
+        paste_action.setEnabled(QApplication.clipboard().text() != "")
+        
+        menu.addSeparator()
+        
+        select_all_action = menu.addAction("🔘 Select All")
+        select_all_action.triggered.connect(self.urlbar.selectAll)
+        
+        # Ping action if there's text
+        url_text = self.urlbar.text().strip()
+        if url_text:
+            menu.addSeparator()
+            ping_action = menu.addAction("🏓 Ping this domain")
+            ping_action.triggered.connect(lambda: self.ping_from_urlbar(url_text))
+        
+        menu.exec_(self.urlbar.mapToGlobal(position))
+    
+    def ping_from_urlbar(self, url_text):
+        """Ping domain from URL bar"""
+        # Extract domain from URL
+        domain = url_text
+        if "://" in domain:
+            domain = domain.split("://")[1]
+        if "/" in domain:
+            domain = domain.split("/")[0]
+        if ":" in domain:
+            domain = domain.split(":")[0]
+        
+        # Open ping tool with pre-filled domain
+        self.show_ping_tool()
+        if self.ping_dialog:
+            self.ping_dialog.set_target(domain)
     
     def on_clipboard_changed(self, content):
         """Handle clipboard content change"""
