@@ -19,6 +19,7 @@ from clipboard_manager import ClipboardManager
 from clipboard_dialog import ClipboardHistoryDialog
 from ping_tool import PingDialog
 from curl_tool import CurlDialog
+from speed_test_tool import SpeedTestDialog
 from command_line_tool import CommandLineWidget
 import ui_helpers
 import styles
@@ -386,6 +387,13 @@ class MainWindow(QMainWindow):
         curl_action.setStatusTip("Make HTTP requests and test APIs")
         curl_action.triggered.connect(self.show_curl_tool)
         tools_menu.addAction(curl_action)
+        
+        # Speed Test Tool action
+        speed_test_action = QAction("⚡ Speed Test", self)
+        speed_test_action.setShortcut("Ctrl+Shift+S")
+        speed_test_action.setStatusTip("Test network download/upload speeds")
+        speed_test_action.triggered.connect(self.show_speed_test_tool)
+        tools_menu.addAction(speed_test_action)
         
         tools_menu.addSeparator()
         
@@ -961,6 +969,16 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.curl_dialog.raise_()
             self.curl_dialog.activateWindow()
+    
+    def show_speed_test_tool(self):
+        """Show speed test dialog"""
+        if not hasattr(self, 'speed_test_dialog') or self.speed_test_dialog is None or not self.speed_test_dialog.isVisible():
+            self.speed_test_dialog = SpeedTestDialog(self)
+            self.speed_test_dialog.show()
+        else:
+            # Bring existing dialog to front
+            self.speed_test_dialog.raise_()
+            self.speed_test_dialog.activateWindow()
     
     def show_water_reminder(self):
         """Show water reminder dialog"""
