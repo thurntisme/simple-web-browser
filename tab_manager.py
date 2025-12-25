@@ -6,9 +6,213 @@ Handles tab creation, navigation, and developer tools.
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtWebEngineWidgets import *
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QColor, QPainter, QPen, QBrush, QFont
 from constants import *
 import browser_utils
+
+
+class NetworkTimelineWidget(QWidget):
+    """Custom widget for displaying network request timeline waterfall chart"""
+    
+    def __init__(self):
+        super().__init__()
+        self.requests = []
+        self.setMinimumHeight(400)
+        self.setStyleSheet("background-color: white;")
+        
+        # Timeline settings
+        self.row_height = 25
+        self.left_margin = 200
+        self.right_margin = 50
+        self.top_margin = 30
+        self.bottom_margin = 20
+        
+        # Colors for different phases
+        self.colors = {
+            'dns': QColor(255, 193, 7),      # Yellow - DNS lookup
+            'tcp': QColor(40, 167, 69),      # Green - TCP connect
+            'tls': QColor(220, 53, 69),      # Red - TLS handshake
+            'request': QColor(0, 123, 255),  # Blue - Request
+            'response': QColor(108, 117, 125) # Gray - Response
+        }
+    
+    def update_requests(self, requests):
+        """Update the requests data and repaint"""
+        self.requests = requests
+        self.update_size()
+        self.update()
+    
+    def clear_requests(self):
+        """Clear all requests"""
+        self.requests = []
+        self.update()
+    
+    def update_size(self):
+        """Update widget size based on number of requests"""
+        if self.requests:
+            height = self.top_margin + len(self.requests) * self.row_height + self.bottom_margin
+            self.setMinimumHeight(max(400, height))
+    
+    def paintEvent(self, event):
+        """Paint the waterfall chart"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        if not self.requests:
+            # Draw empty state
+            painter.setPen(QPen(QColor(108, 117, 125), 1))
+            painter.drawText(self.rect(), Qt.AlignCenter, "No network requests recorded yet.\nClick 'Start Recording' to begin monitoring.")
+            return
+        
+        # Calculate time range
+        start_times = [r.get('startTime', 0) for r in self.requests if r.get('startTime')]
+        end_times = [r.get('endTime', r.get('startTime', 0)) for r in self.requests if r.get('startTime')]
+        
+        if not start_times:
+            return
+        
+        min_time = min(start_times)
+        max_time = max(end_times) if end_times else min_time + 1000
+        time_range = max_time - min_time
+        
+        if time_range <= 0:
+            time_range = 1000  # Default 1 second range
+        
+        # Calculate chart dimensions
+        chart_width = self.width() - self.left_margin - self.right_margin
+        chart_height = len(self.requests) * self.row_height
+        
+        # Draw time axis
+        self.draw_time_axis(painter, min_time, max_time, time_range, chart_width)
+        
+        # Draw requests
+        for i, request in enumerate(self.requests):
+            y = self.top_margin + i * self.row_height
+            self.draw_request_bar(painter, request, y, min_time, time_range, chart_width)
+            self.draw_request_label(painter, request, y)
+    
+    def draw_time_axis(self, painter, min_time, max_time, time_range, chart_width):
+        """Draw the time axis at the top"""
+        painter.setPen(QPen(QColor(108, 117, 125), 1))
+        
+        # Draw axis line
+        y = self.top_margin - 10
+        painter.drawLine(self.left_margin, y, self.left_margin + chart_width, y)
+        
+        # Draw time markers
+        num_markers = 10
+        for i in range(num_markers + 1):
+            x = self.left_margin + (i * chart_width / num_markers)
+            time_ms = min_time + (i * time_range / num_markers)
+            
+            # Draw tick
+            painter.drawLine(x, y - 3, x, y + 3)
+            
+            # Draw time label
+            if time_ms < 1000:
+                time_text = f"{time_ms:.0f}ms"
+            else:
+                time_text = f"{time_ms/1000:.1f}s"
+            
+            painter.drawText(x - 20, y - 15, 40, 12, Qt.AlignCenter, time_text)
+    
+    def draw_request_bar(self, painter, request, y, min_time, time_range, chart_width):
+        """Draw a single request bar with timing phases"""
+        start_time = request.get('startTime', 0)
+        end_time = request.get('endTime', start_time)
+        timing = request.get('timing', {})
+        
+        if start_time == 0:
+            return
+        
+        # Calculate position and width
+        start_x = self.left_margin + ((start_time - min_time) / time_range) * chart_width
+        
+        if end_time > start_time:
+            total_width = ((end_time - start_time) / time_range) * chart_width
+        else:
+            total_width = 5  # Minimum width for pending requests
+        
+        bar_height = self.row_height - 4
+        bar_y = y + 2
+        
+        if timing:
+            # Draw detailed timing phases
+            current_x = start_x
+            
+            phases = [
+                ('dns', timing.get('dns', 0)),
+                ('tcp', timing.get('tcp', 0)),
+                ('tls', timing.get('tls', 0)),
+                ('request', timing.get('request', 0)),
+                ('response', timing.get('response', 0))
+            ]
+            
+            total_timing = sum(phase[1] for phase in phases)
+            
+            if total_timing > 0:
+                for phase_name, phase_time in phases:
+                    if phase_time > 0:
+                        phase_width = (phase_time / total_timing) * total_width
+                        
+                        # Draw phase bar
+                        painter.fillRect(current_x, bar_y, phase_width, bar_height, 
+                                       QBrush(self.colors.get(phase_name, QColor(200, 200, 200))))
+                        
+                        # Draw phase border
+                        painter.setPen(QPen(QColor(255, 255, 255), 1))
+                        painter.drawRect(current_x, bar_y, phase_width, bar_height)
+                        
+                        current_x += phase_width
+            else:
+                # No timing data, draw simple bar
+                color = QColor(108, 117, 125) if end_time > start_time else QColor(255, 193, 7)
+                painter.fillRect(start_x, bar_y, total_width, bar_height, QBrush(color))
+        else:
+            # No timing data, draw simple bar
+            color = QColor(108, 117, 125) if end_time > start_time else QColor(255, 193, 7)
+            painter.fillRect(start_x, bar_y, total_width, bar_height, QBrush(color))
+        
+        # Draw status indicator
+        status = request.get('status', 0)
+        if status:
+            if status < 300:
+                status_color = QColor(40, 167, 69)  # Green
+            elif status < 400:
+                status_color = QColor(255, 193, 7)  # Yellow
+            else:
+                status_color = QColor(220, 53, 69)  # Red
+            
+            painter.fillRect(start_x - 3, bar_y, 3, bar_height, QBrush(status_color))
+    
+    def draw_request_label(self, painter, request, y):
+        """Draw request label on the left side"""
+        url = request.get('url', '')
+        method = request.get('method', 'GET')
+        
+        # Truncate URL if too long
+        if len(url) > 30:
+            url = '...' + url[-27:]
+        
+        # Draw method
+        painter.setPen(QPen(QColor(0, 123, 255), 1))
+        painter.drawText(5, y + 2, 40, self.row_height - 4, Qt.AlignLeft | Qt.AlignVCenter, method)
+        
+        # Draw URL
+        painter.setPen(QPen(QColor(33, 37, 41), 1))
+        painter.drawText(50, y + 2, self.left_margin - 55, self.row_height - 4, 
+                        Qt.AlignLeft | Qt.AlignVCenter, url)
+        
+        # Draw timing info
+        start_time = request.get('startTime', 0)
+        end_time = request.get('endTime', 0)
+        if end_time > start_time:
+            duration = end_time - start_time
+            timing_text = f"{duration:.0f}ms"
+            painter.setPen(QPen(QColor(108, 117, 125), 1))
+            painter.drawText(self.width() - self.right_margin + 5, y + 2, 
+                           self.right_margin - 10, self.row_height - 4, 
+                           Qt.AlignLeft | Qt.AlignVCenter, timing_text)
 
 
 class TabManager:
@@ -208,6 +412,11 @@ class TabManager:
                 security_score_action = QAction("🛡️ Security Score", self.main_window)
                 security_score_action.triggered.connect(lambda: self.analyze_security_score(browser))
                 menu.addAction(security_score_action)
+                
+                # Add Network Request Timeline feature
+                network_timeline_action = QAction("📊 Network Request Timeline", self.main_window)
+                network_timeline_action.triggered.connect(lambda: self.show_network_timeline(browser))
+                menu.addAction(network_timeline_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -4328,6 +4537,608 @@ class TabManager:
                         json.dump(report, f, indent=2, ensure_ascii=False)
                 
                 self.main_window.status_info.setText(f"📄 Security report exported: {file_path}")
+                QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Export error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_network_timeline(self, browser):
+        """Show network request timeline with waterfall visualization"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("📊 Loading Network Request Timeline...")
+            
+            # Create and show the network timeline dialog
+            self.create_network_timeline_dialog(browser, current_url)
+            
+        except Exception as e:
+            # Show error in a message box for debugging
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.critical(self.main_window, "Network Timeline Error", f"Error: {str(e)}")
+            self.main_window.status_info.setText(f"❌ Network timeline error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def create_network_timeline_dialog(self, browser, page_url):
+        """Create network timeline dialog with real-time waterfall visualization"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QPushButton, QTabWidget, QWidget, QTreeWidget, 
+                                   QTreeWidgetItem, QHeaderView, QSplitter, QFrame,
+                                   QScrollArea, QProgressBar, QComboBox, QCheckBox,
+                                   QSpinBox, QGroupBox, QTextEdit)
+        from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QObject
+        from PyQt5.QtGui import QFont, QPainter, QPen, QBrush, QColor, QPixmap
+        from datetime import datetime
+        import json
+        
+        try:
+            # Create dialog
+            dialog = QDialog(self.main_window)
+            dialog.setWindowTitle(f"📊 Network Request Timeline - {page_url}")
+            dialog.setMinimumSize(1200, 800)
+            dialog.resize(1400, 900)
+            
+            layout = QVBoxLayout(dialog)
+            
+            # Header with controls
+            header_frame = QFrame()
+            header_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #d0d0d0; border-radius: 8px; padding: 10px;")
+            header_layout = QHBoxLayout(header_frame)
+            
+            # Title
+            title_label = QLabel("📊 Network Request Timeline")
+            title_font = QFont()
+            title_font.setPointSize(16)
+            title_font.setBold(True)
+            title_label.setFont(title_font)
+            header_layout.addWidget(title_label)
+            
+            header_layout.addStretch()
+            
+            # Controls
+            self.timeline_recording = False
+            self.timeline_requests = []
+            
+            # Record button
+            self.record_btn = QPushButton("🔴 Start Recording")
+            self.record_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                }
+                QPushButton:hover {
+                    background-color: #c82333;
+                }
+            """)
+            self.record_btn.clicked.connect(lambda: self.toggle_timeline_recording(browser, dialog))
+            header_layout.addWidget(self.record_btn)
+            
+            # Clear button
+            clear_btn = QPushButton("🗑️ Clear")
+            clear_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #6c757d;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                }
+                QPushButton:hover {
+                    background-color: #5a6268;
+                }
+            """)
+            clear_btn.clicked.connect(lambda: self.clear_timeline_data(dialog))
+            header_layout.addWidget(clear_btn)
+            
+            # Export button
+            export_btn = QPushButton("💾 Export")
+            export_btn.clicked.connect(lambda: self.export_timeline_data())
+            header_layout.addWidget(export_btn)
+            
+            layout.addWidget(header_frame)
+            
+            # Main content area
+            main_splitter = QSplitter(Qt.Vertical)
+            layout.addWidget(main_splitter)
+            
+            # Timeline visualization area
+            timeline_frame = QFrame()
+            timeline_frame.setStyleSheet("border: 1px solid #d0d0d0; border-radius: 4px;")
+            timeline_layout = QVBoxLayout(timeline_frame)
+            
+            # Timeline header
+            timeline_header = QLabel("🌊 Waterfall Chart")
+            timeline_header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+            timeline_layout.addWidget(timeline_header)
+            
+            # Scroll area for timeline
+            self.timeline_scroll = QScrollArea()
+            self.timeline_scroll.setWidgetResizable(True)
+            self.timeline_scroll.setMinimumHeight(400)
+            
+            # Timeline widget
+            self.timeline_widget = NetworkTimelineWidget()
+            self.timeline_scroll.setWidget(self.timeline_widget)
+            timeline_layout.addWidget(self.timeline_scroll)
+            
+            main_splitter.addWidget(timeline_frame)
+            
+            # Request details area
+            details_frame = QFrame()
+            details_frame.setStyleSheet("border: 1px solid #d0d0d0; border-radius: 4px;")
+            details_layout = QVBoxLayout(details_frame)
+            
+            # Details header
+            details_header = QLabel("📋 Request Details")
+            details_header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+            details_layout.addWidget(details_header)
+            
+            # Request list
+            self.request_tree = QTreeWidget()
+            self.request_tree.setHeaderLabels(['URL', 'Method', 'Status', 'Type', 'Size', 'Time', 'Timeline'])
+            self.request_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+            self.request_tree.itemClicked.connect(self.on_request_selected)
+            details_layout.addWidget(self.request_tree)
+            
+            main_splitter.addWidget(details_frame)
+            
+            # Set splitter proportions
+            main_splitter.setSizes([500, 300])
+            
+            # Status and statistics
+            stats_frame = QFrame()
+            stats_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #d0d0d0; border-radius: 4px; padding: 10px;")
+            stats_layout = QHBoxLayout(stats_frame)
+            
+            self.stats_label = QLabel("📊 Ready to record network requests")
+            stats_layout.addWidget(self.stats_label)
+            
+            stats_layout.addStretch()
+            
+            # Close button
+            close_btn = QPushButton("❌ Close")
+            close_btn.clicked.connect(dialog.close)
+            stats_layout.addWidget(close_btn)
+            
+            layout.addWidget(stats_frame)
+            
+            # Store dialog reference and UI elements
+            self.timeline_dialog = dialog
+            self.timeline_stats_label = self.stats_label  # Store reference to avoid deletion issues
+            
+            # Update status
+            self.main_window.status_info.setText("📊 Network Timeline ready - Click 'Start Recording' to begin")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+            
+            # Show dialog
+            dialog.show()
+            
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.critical(self.main_window, "Timeline Dialog Error", f"Error creating dialog: {str(e)}")
+            raise e
+    
+    def toggle_timeline_recording(self, browser, dialog):
+        """Toggle network request recording"""
+        if not self.timeline_recording:
+            # Start recording
+            self.timeline_recording = True
+            self.timeline_requests = []
+            self.record_btn.setText("⏹️ Stop Recording")
+            self.record_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #28a745;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                }
+                QPushButton:hover {
+                    background-color: #218838;
+                }
+            """)
+            self.timeline_stats_label.setText("🔴 Recording network requests...")
+            
+            # Start monitoring network requests
+            self.start_network_monitoring(browser)
+            
+        else:
+            # Stop recording
+            self.timeline_recording = False
+            self.record_btn.setText("🔴 Start Recording")
+            self.record_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                }
+                QPushButton:hover {
+                    background-color: #c82333;
+                }
+            """)
+            self.timeline_stats_label.setText(f"⏹️ Recording stopped - {len(self.timeline_requests)} requests captured")
+            
+            # Stop monitoring
+            self.stop_network_monitoring()
+    
+    def start_network_monitoring(self, browser):
+        """Start monitoring network requests using JavaScript"""
+        page = browser.page()
+        
+        # JavaScript to monitor network requests
+        js_code = """
+        (function() {
+            if (window.networkMonitor) {
+                return; // Already monitoring
+            }
+            
+            window.networkMonitor = {
+                requests: [],
+                startTime: performance.now(),
+                observer: null
+            };
+            
+            // Override fetch
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const startTime = performance.now();
+                const url = args[0];
+                const options = args[1] || {};
+                
+                const requestData = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    url: url,
+                    method: options.method || 'GET',
+                    startTime: startTime,
+                    type: 'fetch'
+                };
+                
+                window.networkMonitor.requests.push(requestData);
+                
+                return originalFetch.apply(this, args).then(response => {
+                    requestData.endTime = performance.now();
+                    requestData.status = response.status;
+                    requestData.statusText = response.statusText;
+                    requestData.size = response.headers.get('content-length') || 0;
+                    requestData.contentType = response.headers.get('content-type') || 'unknown';
+                    return response;
+                }).catch(error => {
+                    requestData.endTime = performance.now();
+                    requestData.error = error.message;
+                    throw error;
+                });
+            };
+            
+            // Override XMLHttpRequest
+            const originalXHROpen = XMLHttpRequest.prototype.open;
+            const originalXHRSend = XMLHttpRequest.prototype.send;
+            
+            XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+                this._requestData = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    url: url,
+                    method: method,
+                    startTime: performance.now(),
+                    type: 'xhr'
+                };
+                return originalXHROpen.apply(this, arguments);
+            };
+            
+            XMLHttpRequest.prototype.send = function(data) {
+                if (this._requestData) {
+                    window.networkMonitor.requests.push(this._requestData);
+                    
+                    this.addEventListener('loadend', () => {
+                        this._requestData.endTime = performance.now();
+                        this._requestData.status = this.status;
+                        this._requestData.statusText = this.statusText;
+                        this._requestData.size = this.getResponseHeader('content-length') || this.responseText.length || 0;
+                        this._requestData.contentType = this.getResponseHeader('content-type') || 'unknown';
+                    });
+                    
+                    this.addEventListener('error', () => {
+                        this._requestData.endTime = performance.now();
+                        this._requestData.error = 'Network error';
+                    });
+                }
+                return originalXHRSend.apply(this, arguments);
+            };
+            
+            // Monitor resource loading
+            if (window.PerformanceObserver) {
+                window.networkMonitor.observer = new PerformanceObserver((list) => {
+                    for (const entry of list.getEntries()) {
+                        if (entry.entryType === 'resource') {
+                            const requestData = {
+                                id: Math.random().toString(36).substr(2, 9),
+                                url: entry.name,
+                                method: 'GET',
+                                startTime: entry.startTime,
+                                endTime: entry.startTime + entry.duration,
+                                type: entry.initiatorType || 'resource',
+                                size: entry.transferSize || 0,
+                                // Timing breakdown
+                                timing: {
+                                    dns: entry.domainLookupEnd - entry.domainLookupStart,
+                                    tcp: entry.connectEnd - entry.connectStart,
+                                    tls: entry.secureConnectionStart > 0 ? entry.connectEnd - entry.secureConnectionStart : 0,
+                                    request: entry.responseStart - entry.requestStart,
+                                    response: entry.responseEnd - entry.responseStart,
+                                    total: entry.duration
+                                }
+                            };
+                            window.networkMonitor.requests.push(requestData);
+                        }
+                    }
+                });
+                
+                window.networkMonitor.observer.observe({entryTypes: ['resource']});
+            }
+            
+            return 'Network monitoring started';
+        })();
+        """
+        
+        page.runJavaScript(js_code, lambda result: self.on_monitoring_started(result))
+        
+        # Start periodic updates
+        self.timeline_timer = QTimer()
+        self.timeline_timer.timeout.connect(lambda: self.update_timeline_data(browser))
+        self.timeline_timer.start(1000)  # Update every second
+    
+    def on_monitoring_started(self, result):
+        """Handle monitoring start result"""
+        if result:
+            self.main_window.status_info.setText("📊 Network monitoring active")
+            QTimer.singleShot(2000, lambda: self.main_window.status_info.setText(""))
+    
+    def update_timeline_data(self, browser):
+        """Update timeline with new network request data"""
+        if not self.timeline_recording:
+            return
+            
+        page = browser.page()
+        
+        # JavaScript to get current network data
+        js_code = """
+        (function() {
+            if (!window.networkMonitor) {
+                return [];
+            }
+            
+            const requests = window.networkMonitor.requests.slice();
+            // Clear processed requests to avoid duplicates
+            window.networkMonitor.requests = [];
+            
+            return requests;
+        })();
+        """
+        
+        page.runJavaScript(js_code, self.process_timeline_update)
+    
+    def process_timeline_update(self, new_requests):
+        """Process new network requests and update timeline"""
+        if not new_requests or not self.timeline_recording:
+            return
+            
+        # Add new requests to our collection
+        for request in new_requests:
+            self.timeline_requests.append(request)
+            self.add_request_to_tree(request)
+        
+        # Update timeline visualization
+        self.timeline_widget.update_requests(self.timeline_requests)
+        
+        # Update statistics
+        total_requests = len(self.timeline_requests)
+        completed_requests = len([r for r in self.timeline_requests if r.get('endTime')])
+        self.timeline_stats_label.setText(f"🔴 Recording: {total_requests} requests ({completed_requests} completed)")
+    
+    def add_request_to_tree(self, request):
+        """Add a request to the tree widget"""
+        item = QTreeWidgetItem()
+        
+        # URL
+        url = request.get('url', '')
+        if len(url) > 80:
+            url = url[:77] + '...'
+        item.setText(0, url)
+        
+        # Method
+        item.setText(1, request.get('method', 'GET'))
+        
+        # Status
+        status = request.get('status', '')
+        if status:
+            status_text = f"{status} {request.get('statusText', '')}"
+            if status < 300:
+                item.setBackground(2, QColor(212, 237, 218))  # Green
+            elif status < 400:
+                item.setBackground(2, QColor(255, 243, 205))  # Yellow
+            else:
+                item.setBackground(2, QColor(248, 215, 218))  # Red
+        else:
+            status_text = 'Pending...'
+            item.setBackground(2, QColor(230, 230, 230))  # Gray
+        item.setText(2, str(status_text))
+        
+        # Type
+        item.setText(3, request.get('type', 'unknown'))
+        
+        # Size
+        size = request.get('size', 0)
+        if size:
+            if size > 1024 * 1024:
+                size_text = f"{size / (1024 * 1024):.1f} MB"
+            elif size > 1024:
+                size_text = f"{size / 1024:.1f} KB"
+            else:
+                size_text = f"{size} B"
+        else:
+            size_text = '-'
+        item.setText(4, size_text)
+        
+        # Time
+        start_time = request.get('startTime', 0)
+        end_time = request.get('endTime', 0)
+        if end_time:
+            duration = end_time - start_time
+            item.setText(5, f"{duration:.0f}ms")
+        else:
+            item.setText(5, 'Pending...')
+        
+        # Timeline (visual representation)
+        timeline_text = self.create_timeline_text(request)
+        item.setText(6, timeline_text)
+        
+        # Store request data
+        item.setData(0, Qt.UserRole, request)
+        
+        self.request_tree.addTopLevelItem(item)
+        
+        # Auto-scroll to bottom
+        self.request_tree.scrollToBottom()
+    
+    def create_timeline_text(self, request):
+        """Create a simple text-based timeline representation"""
+        timing = request.get('timing', {})
+        if not timing:
+            return '▓▓▓▓▓'
+        
+        # Create a simple bar representation
+        dns = timing.get('dns', 0)
+        tcp = timing.get('tcp', 0)
+        tls = timing.get('tls', 0)
+        req = timing.get('request', 0)
+        resp = timing.get('response', 0)
+        
+        total = dns + tcp + tls + req + resp
+        if total == 0:
+            return '▓▓▓▓▓'
+        
+        # Scale to 20 characters
+        scale = 20 / max(total, 1)
+        
+        dns_chars = max(1, int(dns * scale)) if dns > 0 else 0
+        tcp_chars = max(1, int(tcp * scale)) if tcp > 0 else 0
+        tls_chars = max(1, int(tls * scale)) if tls > 0 else 0
+        req_chars = max(1, int(req * scale)) if req > 0 else 0
+        resp_chars = max(1, int(resp * scale)) if resp > 0 else 0
+        
+        timeline = ''
+        timeline += '🔍' * dns_chars  # DNS
+        timeline += '🔗' * tcp_chars  # TCP
+        timeline += '🔒' * tls_chars  # TLS
+        timeline += '📤' * req_chars  # Request
+        timeline += '📥' * resp_chars  # Response
+        
+        return timeline[:20]  # Limit to 20 characters
+    
+    def on_request_selected(self, item, column):
+        """Handle request selection in tree"""
+        request_data = item.data(0, Qt.UserRole)
+        if request_data:
+            # Show detailed timing information
+            self.show_request_details(request_data)
+    
+    def show_request_details(self, request_data):
+        """Show detailed information about a selected request"""
+        # This could open a detailed dialog or update a details panel
+        # For now, just update the status
+        url = request_data.get('url', 'Unknown')
+        method = request_data.get('method', 'GET')
+        status = request_data.get('status', 'Pending')
+        
+        self.main_window.status_info.setText(f"📋 Selected: {method} {url} - Status: {status}")
+        QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def stop_network_monitoring(self):
+        """Stop network monitoring"""
+        if hasattr(self, 'timeline_timer'):
+            self.timeline_timer.stop()
+    
+    def clear_timeline_data(self, dialog):
+        """Clear all timeline data"""
+        self.timeline_requests = []
+        self.request_tree.clear()
+        self.timeline_widget.clear_requests()
+        self.timeline_stats_label.setText("📊 Timeline cleared - Ready to record")
+    
+    def export_timeline_data(self):
+        """Export timeline data to file"""
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            from datetime import datetime
+            import json
+            
+            if not self.timeline_requests:
+                self.main_window.status_info.setText("❌ No timeline data to export")
+                QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                return
+            
+            # Generate filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"network_timeline_{timestamp}.json"
+            
+            # Show save dialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self.timeline_dialog,
+                "Export Network Timeline",
+                filename,
+                "JSON Files (*.json);;CSV Files (*.csv);;All Files (*.*)"
+            )
+            
+            if file_path:
+                if file_path.endswith('.csv'):
+                    # Export as CSV
+                    import csv
+                    with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(['URL', 'Method', 'Status', 'Type', 'Size', 'Start Time', 'End Time', 'Duration', 'DNS', 'TCP', 'TLS', 'Request', 'Response'])
+                        
+                        for req in self.timeline_requests:
+                            timing = req.get('timing', {})
+                            duration = (req.get('endTime', 0) - req.get('startTime', 0)) if req.get('endTime') else 0
+                            
+                            writer.writerow([
+                                req.get('url', ''),
+                                req.get('method', 'GET'),
+                                req.get('status', ''),
+                                req.get('type', ''),
+                                req.get('size', 0),
+                                req.get('startTime', 0),
+                                req.get('endTime', 0),
+                                duration,
+                                timing.get('dns', 0),
+                                timing.get('tcp', 0),
+                                timing.get('tls', 0),
+                                timing.get('request', 0),
+                                timing.get('response', 0)
+                            ])
+                else:
+                    # Export as JSON
+                    export_data = {
+                        'timestamp': datetime.now().isoformat(),
+                        'total_requests': len(self.timeline_requests),
+                        'requests': self.timeline_requests
+                    }
+                    
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(export_data, f, indent=2, ensure_ascii=False)
+                
+                self.main_window.status_info.setText(f"📄 Timeline exported: {file_path}")
                 QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
                 
         except Exception as e:
