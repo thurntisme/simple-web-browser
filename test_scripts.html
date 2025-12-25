@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Script Scanner Test Page</title>
+    
+    <!-- Content Security Policy for testing -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://code.jquery.com https://cdn.jsdelivr.net https://unpkg.com https://www.google-analytics.com;">
+    
+    <!-- External Scripts with different security configurations -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" 
+            integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" 
+            crossorigin="anonymous"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p"
+            crossorigin="anonymous"></script>
+    
+    <!-- External script without integrity (security risk) -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    
+    <!-- Local script with defer -->
+    <script src="./local-script.js" defer></script>
+    
+    <!-- Async script -->
+    <script async src="https://www.google-analytics.com/analytics.js"></script>
+    
+    <!-- Script with nonce for CSP testing -->
+    <script nonce="random-nonce-123" src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+</head>
+<body>
+    <h1>Advanced Script Scanner Test Page</h1>
+    <p>This page contains various types of scripts to test both basic and advanced scanner features:</p>
+    
+    <ul>
+        <li>External scripts with/without integrity checks</li>
+        <li>Scripts with async/defer/blocking loading</li>
+        <li>Inline scripts with security vulnerabilities</li>
+        <li>Scripts with nonce attributes</li>
+        <li>Content Security Policy header</li>
+        <li>Common JavaScript libraries and frameworks</li>
+    </ul>
+    
+    <div style="background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <h3>🧪 How to Test the Script Scanner:</h3>
+        <ol>
+            <li>Right-click anywhere on this page</li>
+            <li><strong>Basic Scanner:</strong> Select "📜 Scan Scripts (Inline & External)"</li>
+            <li><strong>Advanced Analysis:</strong> Select "🔍 Advanced Script Analysis"</li>
+            <li><strong>View Content:</strong> Double-click on any script in the list to view its full content</li>
+        </ol>
+        <p><strong>Features to test:</strong></p>
+        <ul>
+            <li>Security analysis (CSP, SRI, nonce usage)</li>
+            <li>Performance analysis (blocking vs async/defer)</li>
+            <li>Library detection (jQuery, Bootstrap, Axios, etc.)</li>
+            <li>Vulnerability detection in inline scripts</li>
+            <li>API usage and DOM manipulation analysis</li>
+        </ul>
+    </div>
+    
+    <button id="testBtn">Click me to test inline script</button>
+    <button id="unsafeBtn">Test Unsafe Functions</button>
+    <div id="output"></div>
+    
+    <!-- Inline Scripts with various patterns for testing -->
+    <script type="text/javascript">
+        // Simple inline script
+        console.log('Page loaded successfully');
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM ready');
+            
+            // jQuery usage detection
+            if (typeof $ !== 'undefined') {
+                $('#testBtn').css('background-color', 'lightblue');
+            }
+        });
+    </script>
+    
+    <script id="main-script" class="app-script">
+        // Script with ID and class for testing
+        function handleClick() {
+            // DOM manipulation
+            document.getElementById('output').innerHTML = 'Button clicked!';
+            
+            // Local storage usage
+            localStorage.setItem('lastClick', new Date().toISOString());
+            
+            // Fetch API usage
+            fetch('/api/test')
+                .then(response => response.json())
+                .then(data => console.log(data))
+                .catch(error => console.error('Error:', error));
+        }
+        
+        // Event listener attachment
+        document.getElementById('testBtn').addEventListener('click', handleClick);
+    </script>
+    
+    <script>
+        // Potentially unsafe inline script (for security analysis testing)
+        function unsafeFunction() {
+            // High severity security issues
+            eval('console.log("Using eval - HIGH RISK!")');
+            var func = new Function('return "Function constructor - HIGH RISK!"');
+            
+            // Medium severity issues
+            document.write('<p>Using document.write - MEDIUM RISK</p>');
+            setTimeout('alert("String in setTimeout - MEDIUM RISK")', 1000);
+            setInterval('console.log("String in setInterval - MEDIUM RISK")', 5000);
+            
+            // innerHTML manipulation
+            var userInput = '<img src="x" onerror="alert(\'XSS\')">';
+            document.getElementById('output').innerHTML = userInput;
+            document.getElementById('output').outerHTML = '<div>Changed outer HTML</div>';
+            
+            // Low severity issues
+            window.open('https://example.com', '_blank');
+            location.href = 'javascript:alert("JavaScript protocol")';
+        }
+        
+        // Protocol usage examples
+        var jsProtocol = 'javascript:alert("JS Protocol")';
+        var dataProtocol = 'data:text/html,<script>alert("Data Protocol")</script>';
+        var vbsProtocol = 'vbscript:msgbox("VBS Protocol")';
+        
+        // API usage examples for detection
+        navigator.geolocation.getCurrentPosition(function(position) {
+            console.log('Geolocation API used');
+        });
+        
+        // WebSocket usage
+        if (typeof WebSocket !== 'undefined') {
+            // var ws = new WebSocket('ws://localhost:8080');
+        }
+        
+        // IndexedDB usage
+        if ('indexedDB' in window) {
+            var request = indexedDB.open('TestDB', 1);
+        }
+        
+        // Session storage
+        sessionStorage.setItem('test', 'session data');
+        
+        // XMLHttpRequest usage
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/data', true);
+        
+        // Attach unsafe function to button
+        document.addEventListener('DOMContentLoaded', function() {
+            var unsafeBtn = document.getElementById('unsafeBtn');
+            if (unsafeBtn) {
+                unsafeBtn.addEventListener('click', unsafeFunction);
+            }
+        });
+    </script>
+    
+    <script type="module">
+        // ES6 module script
+        console.log('ES6 module loaded');
+        
+        // Modern JavaScript features
+        const modernFeatures = {
+            async fetchData() {
+                try {
+                    const response = await fetch('/api/modern');
+                    return await response.json();
+                } catch (error) {
+                    console.error('Modern fetch error:', error);
+                }
+            }
+        };
+        
+        // Export for module detection
+        export { modernFeatures };
+    </script>
+    
+    <script nonce="test-nonce-456">
+        // Script with nonce for CSP testing
+        console.log('Script with nonce executed');
+        
+        // React-like patterns for library detection
+        if (typeof React !== 'undefined') {
+            console.log('React detected');
+        }
+        
+        // Vue.js patterns
+        if (typeof Vue !== 'undefined') {
+            console.log('Vue.js detected');
+        }
+        
+        // Angular patterns
+        if (typeof angular !== 'undefined') {
+            console.log('Angular detected');
+        }
+    </script>
+    
+    <!-- Additional external scripts for comprehensive testing -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+</body>
+</html>

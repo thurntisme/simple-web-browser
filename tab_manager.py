@@ -173,10 +173,20 @@ class TabManager:
                 link_scanner_action.triggered.connect(lambda: self.scan_broken_links(browser))
                 menu.addAction(link_scanner_action)
                 
-                # Add script scanner
-                script_scanner_action = QAction("📜 Scan Scripts (Inline & External)", self.main_window)
+        # Add script scanner
+                script_scanner_action = QAction("📜 Scan Scripts (Inline, External)", self.main_window)
                 script_scanner_action.triggered.connect(lambda: self.scan_scripts(browser))
                 menu.addAction(script_scanner_action)
+                
+                # Add advanced script analysis
+                advanced_script_action = QAction("🔍 Advanced Script Analysis", self.main_window)
+                advanced_script_action.triggered.connect(lambda: self.advanced_script_analysis(browser))
+                menu.addAction(advanced_script_action)
+                
+                # Add page speed analyzer
+                speed_analyzer_action = QAction("⚡ Page Speed Analyzer", self.main_window)
+                speed_analyzer_action.triggered.connect(lambda: self.analyze_page_speed(browser))
+                menu.addAction(speed_analyzer_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -1136,6 +1146,1045 @@ class TabManager:
         
         # Show dialog
         dialog.exec_()
+
+    def analyze_page_speed(self, browser):
+        """Analyze page speed and performance metrics"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("⚡ Analyzing page speed...")
+            
+            # JavaScript to collect performance metrics and page analysis
+            js_code = """
+            (function() {
+                var metrics = {
+                    timing: {},
+                    resources: [],
+                    pageInfo: {},
+                    performance: {}
+                };
+                
+                // Navigation Timing API
+                if (window.performance && window.performance.timing) {
+                    var timing = window.performance.timing;
+                    var navigationStart = timing.navigationStart;
+                    
+                    metrics.timing = {
+                        domainLookup: timing.domainLookupEnd - timing.domainLookupStart,
+                        tcpConnect: timing.connectEnd - timing.connectStart,
+                        request: timing.responseStart - timing.requestStart,
+                        response: timing.responseEnd - timing.responseStart,
+                        domProcessing: timing.domComplete - timing.domLoading,
+                        domContentLoaded: timing.domContentLoadedEventEnd - navigationStart,
+                        loadComplete: timing.loadEventEnd - navigationStart,
+                        totalTime: timing.loadEventEnd - navigationStart
+                    };
+                }
+                
+                // Resource Timing API
+                if (window.performance && window.performance.getEntriesByType) {
+                    var resources = window.performance.getEntriesByType('resource');
+                    metrics.resources = resources.map(function(resource) {
+                        return {
+                            name: resource.name,
+                            type: resource.initiatorType || 'other',
+                            size: resource.transferSize || 0,
+                            duration: Math.round(resource.duration),
+                            startTime: Math.round(resource.startTime),
+                            blocked: Math.round(resource.domainLookupStart - resource.fetchStart),
+                            dns: Math.round(resource.domainLookupEnd - resource.domainLookupStart),
+                            connect: Math.round(resource.connectEnd - resource.connectStart),
+                            send: Math.round(resource.responseStart - resource.requestStart),
+                            wait: Math.round(resource.responseStart - resource.requestStart),
+                            receive: Math.round(resource.responseEnd - resource.responseStart)
+                        };
+                    });
+                }
+                
+                // Page Information
+                metrics.pageInfo = {
+                    title: document.title,
+                    url: window.location.href,
+                    doctype: document.doctype ? document.doctype.name : 'unknown',
+                    charset: document.characterSet || document.charset,
+                    referrer: document.referrer,
+                    images: document.images.length,
+                    links: document.links.length,
+                    scripts: document.scripts.length,
+                    stylesheets: document.styleSheets.length,
+                    forms: document.forms.length
+                };
+                
+                // DOM Analysis
+                var allElements = document.getElementsByTagName('*');
+                var elementCounts = {};
+                for (var i = 0; i < allElements.length; i++) {
+                    var tagName = allElements[i].tagName.toLowerCase();
+                    elementCounts[tagName] = (elementCounts[tagName] || 0) + 1;
+                }
+                metrics.pageInfo.totalElements = allElements.length;
+                metrics.pageInfo.elementCounts = elementCounts;
+                
+                // Performance Metrics
+                if (window.performance) {
+                    metrics.performance = {
+                        memory: window.performance.memory ? {
+                            used: window.performance.memory.usedJSHeapSize,
+                            total: window.performance.memory.totalJSHeapSize,
+                            limit: window.performance.memory.jsHeapSizeLimit
+                        } : null,
+                        navigation: window.performance.navigation ? {
+                            type: window.performance.navigation.type,
+                            redirectCount: window.performance.navigation.redirectCount
+                        } : null
+                    };
+                }
+                
+                // Additional metrics
+                metrics.pageInfo.bodySize = document.body ? document.body.innerHTML.length : 0;
+                metrics.pageInfo.headSize = document.head ? document.head.innerHTML.length : 0;
+                
+                return metrics;
+            })();
+            """
+            
+            def process_metrics(metrics):
+                if not metrics:
+                    self.main_window.status_info.setText("❌ Could not collect performance metrics")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the page speed analyzer dialog
+                self.show_page_speed_dialog(metrics, current_url)
+            
+            # Execute JavaScript to get performance metrics
+            page.runJavaScript(js_code, process_metrics)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Page speed analysis error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_page_speed_dialog(self, metrics, page_url):
+        """Show dialog with page speed analysis results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView, 
+                                   QProgressBar, QFileDialog, QSplitter)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        from datetime import datetime
+        import json
+        
+        timing = metrics.get('timing', {})
+        resources = metrics.get('resources', [])
+        page_info = metrics.get('pageInfo', {})
+        performance = metrics.get('performance', {})
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"⚡ Page Speed Analysis")
+        dialog.setMinimumSize(1000, 800)
+        dialog.resize(1200, 900)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"Page Speed Analysis: {page_info.get('title', 'Unknown Page')}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #e8f5e8; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # URL and basic info
+        url_label = QLabel(f"URL: {page_url}")
+        url_label.setStyleSheet("padding: 5px; background-color: #f0f0f0; border-radius: 3px; font-family: monospace;")
+        url_label.setWordWrap(True)
+        layout.addWidget(url_label)
+        
+        # Tab widget for different analysis views
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Performance Overview Tab
+        overview_widget = QWidget()
+        overview_layout = QVBoxLayout(overview_widget)
+        
+        # Performance Score Calculation
+        def calculate_performance_score():
+            score = 100
+            total_time = timing.get('totalTime', 0)
+            
+            # Deduct points based on load time
+            if total_time > 5000:  # > 5 seconds
+                score -= 40
+            elif total_time > 3000:  # > 3 seconds
+                score -= 25
+            elif total_time > 1000:  # > 1 second
+                score -= 10
+            
+            # Deduct points for large number of resources
+            if len(resources) > 100:
+                score -= 15
+            elif len(resources) > 50:
+                score -= 10
+            
+            # Deduct points for large resources
+            large_resources = [r for r in resources if r.get('size', 0) > 1024 * 1024]  # > 1MB
+            score -= len(large_resources) * 5
+            
+            return max(0, min(100, score))
+        
+        perf_score = calculate_performance_score()
+        
+        # Score display
+        score_label = QLabel(f"Performance Score: {perf_score}/100")
+        if perf_score >= 90:
+            score_color = "#28a745"  # Green
+            score_text = "Excellent"
+        elif perf_score >= 70:
+            score_color = "#ffc107"  # Yellow
+            score_text = "Good"
+        elif perf_score >= 50:
+            score_color = "#fd7e14"  # Orange
+            score_text = "Needs Improvement"
+        else:
+            score_color = "#dc3545"  # Red
+            score_text = "Poor"
+        
+        score_label.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {score_color}; padding: 10px; background-color: #f8f9fa; border-radius: 5px;")
+        overview_layout.addWidget(score_label)
+        
+        grade_label = QLabel(f"Grade: {score_text}")
+        grade_label.setStyleSheet(f"font-size: 14px; color: {score_color}; padding: 5px;")
+        overview_layout.addWidget(grade_label)
+        
+        # Key Metrics
+        metrics_text = QTextEdit()
+        metrics_text.setReadOnly(True)
+        metrics_text.setMaximumHeight(300)
+        metrics_text.setStyleSheet("font-family: monospace; background-color: #f8f9fa;")
+        
+        metrics_content = []
+        metrics_content.append("⏱️  TIMING METRICS")
+        metrics_content.append("=" * 50)
+        
+        if timing:
+            metrics_content.append(f"Total Load Time:        {timing.get('totalTime', 0):,} ms")
+            metrics_content.append(f"DOM Content Loaded:     {timing.get('domContentLoaded', 0):,} ms")
+            metrics_content.append(f"DOM Processing:         {timing.get('domProcessing', 0):,} ms")
+            metrics_content.append(f"DNS Lookup:             {timing.get('domainLookup', 0):,} ms")
+            metrics_content.append(f"TCP Connection:         {timing.get('tcpConnect', 0):,} ms")
+            metrics_content.append(f"Request Time:           {timing.get('request', 0):,} ms")
+            metrics_content.append(f"Response Time:          {timing.get('response', 0):,} ms")
+        else:
+            metrics_content.append("❌ Timing data not available")
+        
+        metrics_content.append("")
+        metrics_content.append("📊  PAGE STATISTICS")
+        metrics_content.append("=" * 50)
+        metrics_content.append(f"Total Elements:         {page_info.get('totalElements', 0):,}")
+        metrics_content.append(f"Images:                 {page_info.get('images', 0):,}")
+        metrics_content.append(f"Scripts:                {page_info.get('scripts', 0):,}")
+        metrics_content.append(f"Stylesheets:            {page_info.get('stylesheets', 0):,}")
+        metrics_content.append(f"Links:                  {page_info.get('links', 0):,}")
+        metrics_content.append(f"Forms:                  {page_info.get('forms', 0):,}")
+        metrics_content.append(f"Body Size:              {page_info.get('bodySize', 0):,} characters")
+        metrics_content.append(f"Head Size:              {page_info.get('headSize', 0):,} characters")
+        
+        if performance.get('memory'):
+            memory = performance['memory']
+            metrics_content.append("")
+            metrics_content.append("🧠  MEMORY USAGE")
+            metrics_content.append("=" * 50)
+            metrics_content.append(f"Used JS Heap:           {memory.get('used', 0) / 1024 / 1024:.2f} MB")
+            metrics_content.append(f"Total JS Heap:          {memory.get('total', 0) / 1024 / 1024:.2f} MB")
+            metrics_content.append(f"JS Heap Limit:          {memory.get('limit', 0) / 1024 / 1024:.2f} MB")
+        
+        metrics_text.setPlainText('\n'.join(metrics_content))
+        overview_layout.addWidget(metrics_text)
+        
+        tab_widget.addTab(overview_widget, "📊 Overview")
+        
+        # Resources Tab
+        resources_widget = QWidget()
+        resources_layout = QVBoxLayout(resources_widget)
+        
+        resources_label = QLabel(f"🔗 Resources Analysis ({len(resources)} resources)")
+        resources_label.setStyleSheet("font-weight: bold; color: #0066cc;")
+        resources_layout.addWidget(resources_label)
+        
+        # Resources tree
+        resources_tree = QTreeWidget()
+        resources_tree.setHeaderLabels(['Resource', 'Type', 'Size', 'Duration', 'Timeline'])
+        resources_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        resources_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        resources_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        resources_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        resources_tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
+        # Sort resources by size (largest first)
+        sorted_resources = sorted(resources, key=lambda x: x.get('size', 0), reverse=True)
+        
+        for resource in sorted_resources:
+            item = QTreeWidgetItem()
+            
+            # Resource name (shortened)
+            name = resource.get('name', 'Unknown')
+            if len(name) > 60:
+                display_name = name[:57] + "..."
+            else:
+                display_name = name
+            item.setText(0, display_name)
+            item.setToolTip(0, name)  # Full name in tooltip
+            
+            # Type
+            res_type = resource.get('type', 'other')
+            item.setText(1, res_type)
+            
+            # Size
+            size = resource.get('size', 0)
+            if size > 1024 * 1024:  # MB
+                size_str = f"{size / 1024 / 1024:.2f} MB"
+                item.setBackground(2, Qt.red if size > 5 * 1024 * 1024 else Qt.yellow)
+            elif size > 1024:  # KB
+                size_str = f"{size / 1024:.1f} KB"
+            else:
+                size_str = f"{size} B"
+            item.setText(2, size_str)
+            
+            # Duration
+            duration = resource.get('duration', 0)
+            item.setText(3, f"{duration} ms")
+            if duration > 1000:
+                item.setBackground(3, Qt.red)
+            elif duration > 500:
+                item.setBackground(3, Qt.yellow)
+            
+            # Timeline breakdown
+            dns = resource.get('dns', 0)
+            connect = resource.get('connect', 0)
+            send = resource.get('send', 0)
+            receive = resource.get('receive', 0)
+            timeline = f"DNS:{dns}ms | Connect:{connect}ms | Send:{send}ms | Receive:{receive}ms"
+            item.setText(4, timeline)
+            
+            resources_tree.addTopLevelItem(item)
+        
+        resources_layout.addWidget(resources_tree)
+        
+        # Resource summary
+        total_size = sum(r.get('size', 0) for r in resources)
+        avg_duration = sum(r.get('duration', 0) for r in resources) / len(resources) if resources else 0
+        
+        resource_summary = QLabel(f"Total Size: {total_size / 1024 / 1024:.2f} MB | "
+                                f"Average Duration: {avg_duration:.1f} ms | "
+                                f"Largest Resource: {max((r.get('size', 0) for r in resources), default=0) / 1024:.1f} KB")
+        resource_summary.setStyleSheet("padding: 5px; background-color: #f0f0f0; border-radius: 3px; font-family: monospace;")
+        resources_layout.addWidget(resource_summary)
+        
+        tab_widget.addTab(resources_widget, f"🔗 Resources ({len(resources)})")
+        
+        # Recommendations Tab
+        recommendations_widget = QWidget()
+        recommendations_layout = QVBoxLayout(recommendations_widget)
+        
+        recommendations_text = QTextEdit()
+        recommendations_text.setReadOnly(True)
+        recommendations_text.setStyleSheet("font-family: Arial; font-size: 12px;")
+        
+        # Generate recommendations
+        recommendations = []
+        recommendations.append("🚀 PERFORMANCE RECOMMENDATIONS")
+        recommendations.append("=" * 60)
+        recommendations.append("")
+        
+        # Timing-based recommendations
+        total_time = timing.get('totalTime', 0)
+        if total_time > 3000:
+            recommendations.append("🔴 CRITICAL: Page load time is very slow (>3s)")
+            recommendations.append("   • Optimize images and compress resources")
+            recommendations.append("   • Enable browser caching")
+            recommendations.append("   • Use a Content Delivery Network (CDN)")
+            recommendations.append("   • Minimize HTTP requests")
+            recommendations.append("")
+        elif total_time > 1000:
+            recommendations.append("🟡 WARNING: Page load time could be improved (>1s)")
+            recommendations.append("   • Compress images and resources")
+            recommendations.append("   • Enable gzip compression")
+            recommendations.append("   • Optimize CSS and JavaScript")
+            recommendations.append("")
+        
+        # Resource-based recommendations
+        large_resources = [r for r in resources if r.get('size', 0) > 1024 * 1024]
+        if large_resources:
+            recommendations.append(f"🔴 CRITICAL: {len(large_resources)} large resources found (>1MB)")
+            for res in large_resources[:3]:  # Show top 3
+                recommendations.append(f"   • {res.get('name', 'Unknown')[:50]}... ({res.get('size', 0) / 1024 / 1024:.2f} MB)")
+            recommendations.append("   • Compress these resources or load them asynchronously")
+            recommendations.append("")
+        
+        # Too many resources
+        if len(resources) > 100:
+            recommendations.append(f"🟡 WARNING: Many resources loaded ({len(resources)})")
+            recommendations.append("   • Combine CSS and JavaScript files")
+            recommendations.append("   • Use image sprites for small images")
+            recommendations.append("   • Implement lazy loading for images")
+            recommendations.append("")
+        
+        # Script recommendations
+        script_count = page_info.get('scripts', 0)
+        if script_count > 20:
+            recommendations.append(f"🟡 WARNING: Many script files ({script_count})")
+            recommendations.append("   • Combine and minify JavaScript files")
+            recommendations.append("   • Use async/defer attributes for non-critical scripts")
+            recommendations.append("   • Consider removing unused scripts")
+            recommendations.append("")
+        
+        # Memory recommendations
+        if performance.get('memory'):
+            memory = performance['memory']
+            used_mb = memory.get('used', 0) / 1024 / 1024
+            if used_mb > 50:
+                recommendations.append(f"🟡 WARNING: High memory usage ({used_mb:.1f} MB)")
+                recommendations.append("   • Check for memory leaks in JavaScript")
+                recommendations.append("   • Optimize DOM manipulation")
+                recommendations.append("   • Remove unused event listeners")
+                recommendations.append("")
+        
+        # General recommendations
+        recommendations.append("✅ GENERAL OPTIMIZATION TIPS")
+        recommendations.append("-" * 40)
+        recommendations.append("• Enable browser caching with proper cache headers")
+        recommendations.append("• Use WebP format for images when possible")
+        recommendations.append("• Minimize CSS and JavaScript files")
+        recommendations.append("• Remove unused CSS and JavaScript code")
+        recommendations.append("• Use a Content Delivery Network (CDN)")
+        recommendations.append("• Enable gzip/brotli compression on server")
+        recommendations.append("• Optimize database queries (if applicable)")
+        recommendations.append("• Use lazy loading for images and content")
+        recommendations.append("• Implement service workers for caching")
+        recommendations.append("• Consider using HTTP/2 or HTTP/3")
+        
+        recommendations_text.setPlainText('\n'.join(recommendations))
+        recommendations_layout.addWidget(recommendations_text)
+        
+        tab_widget.addTab(recommendations_widget, "💡 Recommendations")
+        
+        # Detailed Report Tab
+        report_widget = QWidget()
+        report_layout = QVBoxLayout(report_widget)
+        
+        report_text = QTextEdit()
+        report_text.setReadOnly(True)
+        report_text.setStyleSheet("font-family: monospace; background-color: #f8f8f8;")
+        
+        # Generate detailed report
+        report_content = []
+        report_content.append("PAGE SPEED ANALYSIS REPORT")
+        report_content.append("=" * 80)
+        report_content.append(f"URL: {page_url}")
+        report_content.append(f"Analysis Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report_content.append(f"Performance Score: {perf_score}/100 ({score_text})")
+        report_content.append("")
+        
+        # Add all metrics in JSON format for detailed analysis
+        report_content.append("DETAILED METRICS (JSON):")
+        report_content.append("-" * 40)
+        report_content.append(json.dumps(metrics, indent=2, default=str))
+        
+        report_text.setPlainText('\n'.join(report_content))
+        report_layout.addWidget(report_text)
+        
+        tab_widget.addTab(report_widget, "📋 Detailed Report")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        export_button = QPushButton("💾 Export Report")
+        reanalyze_button = QPushButton("🔄 Re-analyze")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(reanalyze_button)
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def export_report():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"page_speed_analysis_{timestamp}.txt"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export Page Speed Analysis Report",
+                filename,
+                "Text Files (*.txt);;JSON Files (*.json);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    if file_path.endswith('.json'):
+                        # Export as JSON
+                        export_data = {
+                            'url': page_url,
+                            'analysis_time': datetime.now().isoformat(),
+                            'performance_score': perf_score,
+                            'grade': score_text,
+                            'metrics': metrics
+                        }
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            json.dump(export_data, f, indent=2, default=str)
+                    else:
+                        # Export as text
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(report_text.toPlainText())
+                    
+                    self.main_window.status_info.setText(f"✅ Report exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        # Connect buttons
+        export_button.clicked.connect(export_report)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
+        
+        # Update main window status
+        self.main_window.status_info.setText(f"⚡ Page speed analysis complete - Score: {perf_score}/100")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+    
+    def advanced_script_analysis(self, browser):
+        """Perform advanced analysis of all scripts on the page"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🔍 Performing advanced script analysis...")
+            
+            # Enhanced JavaScript to extract detailed script information
+            js_code = """
+            (function() {
+                var analysis = {
+                    scripts: {
+                        inline: [],
+                        external: []
+                    },
+                    security: {
+                        csp: null,
+                        nonce_usage: false,
+                        sri_usage: 0,
+                        total_external: 0
+                    },
+                    performance: {
+                        blocking_scripts: 0,
+                        async_scripts: 0,
+                        defer_scripts: 0,
+                        total_size_estimate: 0
+                    },
+                    dependencies: {
+                        libraries: [],
+                        frameworks: []
+                    }
+                };
+                
+                // Check for Content Security Policy
+                var metaTags = document.getElementsByTagName('meta');
+                for (var i = 0; i < metaTags.length; i++) {
+                    if (metaTags[i].getAttribute('http-equiv') === 'Content-Security-Policy') {
+                        analysis.security.csp = metaTags[i].getAttribute('content');
+                        break;
+                    }
+                }
+                
+                var scriptTags = document.getElementsByTagName('script');
+                
+                // Common library patterns
+                var libraryPatterns = [
+                    { name: 'jQuery', patterns: ['jquery', 'jQuery', '$'] },
+                    { name: 'React', patterns: ['react', 'React', 'ReactDOM'] },
+                    { name: 'Vue.js', patterns: ['vue', 'Vue'] },
+                    { name: 'Angular', patterns: ['angular', 'ng-'] },
+                    { name: 'Bootstrap', patterns: ['bootstrap'] },
+                    { name: 'Lodash', patterns: ['lodash', '_'] },
+                    { name: 'D3.js', patterns: ['d3'] },
+                    { name: 'Three.js', patterns: ['three', 'THREE'] },
+                    { name: 'Moment.js', patterns: ['moment'] },
+                    { name: 'Axios', patterns: ['axios'] },
+                    { name: 'Chart.js', patterns: ['chart.js', 'Chart'] },
+                    { name: 'Google Analytics', patterns: ['gtag', 'ga(', 'google-analytics'] },
+                    { name: 'Google Tag Manager', patterns: ['gtm', 'googletagmanager'] }
+                ];
+                
+                for (var i = 0; i < scriptTags.length; i++) {
+                    var script = scriptTags[i];
+                    
+                    // Check for nonce usage
+                    if (script.nonce) {
+                        analysis.security.nonce_usage = true;
+                    }
+                    
+                    if (script.src) {
+                        // External script analysis
+                        analysis.security.total_external++;
+                        
+                        var scriptInfo = {
+                            src: script.src,
+                            type: script.type || 'text/javascript',
+                            async: script.async || false,
+                            defer: script.defer || false,
+                            crossorigin: script.crossOrigin || '',
+                            integrity: script.integrity || '',
+                            nonce: script.nonce || '',
+                            id: script.id || '',
+                            className: script.className || '',
+                            loading_type: script.async ? 'async' : (script.defer ? 'defer' : 'blocking')
+                        };
+                        
+                        // Check for SRI usage
+                        if (script.integrity) {
+                            analysis.security.sri_usage++;
+                        }
+                        
+                        // Performance analysis
+                        if (script.async) {
+                            analysis.performance.async_scripts++;
+                        } else if (script.defer) {
+                            analysis.performance.defer_scripts++;
+                        } else {
+                            analysis.performance.blocking_scripts++;
+                        }
+                        
+                        // Library detection
+                        var src_lower = script.src.toLowerCase();
+                        for (var j = 0; j < libraryPatterns.length; j++) {
+                            var lib = libraryPatterns[j];
+                            for (var k = 0; k < lib.patterns.length; k++) {
+                                if (src_lower.includes(lib.patterns[k].toLowerCase())) {
+                                    if (!analysis.dependencies.libraries.includes(lib.name)) {
+                                        analysis.dependencies.libraries.push(lib.name);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        analysis.scripts.external.push(scriptInfo);
+                        
+                    } else if (script.textContent || script.innerHTML) {
+                        // Inline script analysis
+                        var content = script.textContent || script.innerHTML;
+                        var content_lower = content.toLowerCase();
+                        
+                        var scriptInfo = {
+                            content: content.trim(),
+                            type: script.type || 'text/javascript',
+                            nonce: script.nonce || '',
+                            id: script.id || '',
+                            className: script.className || '',
+                            length: content.trim().length,
+                            preview: content.trim().substring(0, 100) + (content.trim().length > 100 ? '...' : ''),
+                            security_issues: [],
+                            api_calls: [],
+                            dom_manipulations: []
+                        };
+                        
+                        // Enhanced security analysis
+                        var securityPatterns = [
+                            { pattern: 'eval(', issue: 'eval() usage', severity: 'high' },
+                            { pattern: 'document.write(', issue: 'document.write() usage', severity: 'medium' },
+                            { pattern: 'innerhtml', issue: 'innerHTML manipulation', severity: 'medium' },
+                            { pattern: 'outerhtml', issue: 'outerHTML manipulation', severity: 'medium' },
+                            { pattern: 'javascript:', issue: 'JavaScript protocol', severity: 'high' },
+                            { pattern: 'data:', issue: 'Data protocol', severity: 'medium' },
+                            { pattern: 'vbscript:', issue: 'VBScript protocol', severity: 'high' },
+                            { pattern: 'settimeout(', issue: 'setTimeout with string', severity: 'medium' },
+                            { pattern: 'setinterval(', issue: 'setInterval with string', severity: 'medium' },
+                            { pattern: 'function constructor', issue: 'Function constructor', severity: 'high' },
+                            { pattern: 'location.href', issue: 'Location manipulation', severity: 'low' },
+                            { pattern: 'window.open(', issue: 'Popup creation', severity: 'low' }
+                        ];
+                        
+                        for (var j = 0; j < securityPatterns.length; j++) {
+                            var pattern = securityPatterns[j];
+                            if (content_lower.includes(pattern.pattern)) {
+                                scriptInfo.security_issues.push({
+                                    issue: pattern.issue,
+                                    severity: pattern.severity,
+                                    pattern: pattern.pattern
+                                });
+                            }
+                        }
+                        
+                        // API call detection
+                        var apiPatterns = [
+                            'fetch(', 'xmlhttprequest', 'axios.', '$.ajax', '$.get', '$.post',
+                            'navigator.geolocation', 'navigator.camera', 'navigator.microphone',
+                            'localstorage', 'sessionstorage', 'indexeddb', 'websocket'
+                        ];
+                        
+                        for (var j = 0; j < apiPatterns.length; j++) {
+                            if (content_lower.includes(apiPatterns[j])) {
+                                scriptInfo.api_calls.push(apiPatterns[j]);
+                            }
+                        }
+                        
+                        // DOM manipulation detection
+                        var domPatterns = [
+                            'getelementbyid', 'getelementsbytagname', 'queryselector',
+                            'addeventlistener', 'removeeventlistener', 'createelement',
+                            'appendchild', 'removechild', 'insertbefore'
+                        ];
+                        
+                        for (var j = 0; j < domPatterns.length; j++) {
+                            if (content_lower.includes(domPatterns[j])) {
+                                scriptInfo.dom_manipulations.push(domPatterns[j]);
+                            }
+                        }
+                        
+                        // Library detection in inline scripts
+                        for (var j = 0; j < libraryPatterns.length; j++) {
+                            var lib = libraryPatterns[j];
+                            for (var k = 0; k < lib.patterns.length; k++) {
+                                if (content_lower.includes(lib.patterns[k].toLowerCase()) || 
+                                    content.includes(lib.patterns[k])) {
+                                    if (!analysis.dependencies.libraries.includes(lib.name)) {
+                                        analysis.dependencies.libraries.push(lib.name);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        analysis.scripts.inline.push(scriptInfo);
+                    }
+                }
+                
+                return analysis;
+            })();
+            """
+            
+            def process_analysis(analysis_data):
+                if not analysis_data:
+                    self.main_window.status_info.setText("ℹ️ No script analysis data available")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the advanced analysis dialog
+                self.show_advanced_analysis_dialog(analysis_data, current_url, browser)
+            
+            # Execute JavaScript to get analysis data
+            page.runJavaScript(js_code, process_analysis)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Advanced analysis error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_advanced_analysis_dialog(self, analysis_data, base_url, browser):
+        """Show dialog with advanced script analysis results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView,
+                                   QProgressBar, QGroupBox, QGridLayout, QFileDialog)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont, QColor
+        from datetime import datetime
+        
+        scripts = analysis_data.get('scripts', {})
+        security = analysis_data.get('security', {})
+        performance = analysis_data.get('performance', {})
+        dependencies = analysis_data.get('dependencies', {})
+        
+        inline_scripts = scripts.get('inline', [])
+        external_scripts = scripts.get('external', [])
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"🔍 Advanced Script Analysis")
+        dialog.setMinimumSize(1000, 800)
+        dialog.resize(1400, 900)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"Advanced Script Analysis for: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; font-size: 14px; padding: 10px; background-color: #e8f4fd; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # Tab widget for different analysis views
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # 1. Security Analysis Tab
+        security_widget = QWidget()
+        security_layout = QVBoxLayout(security_widget)
+        
+        # Security overview
+        security_group = QGroupBox("🔒 Security Overview")
+        security_grid = QGridLayout(security_group)
+        
+        # CSP Status
+        csp_status = "✅ Present" if security.get('csp') else "❌ Missing"
+        csp_label = QLabel(f"Content Security Policy: {csp_status}")
+        if not security.get('csp'):
+            csp_label.setStyleSheet("color: red; font-weight: bold;")
+        security_grid.addWidget(csp_label, 0, 0)
+        
+        # SRI Usage
+        sri_count = security.get('sri_usage', 0)
+        total_external = security.get('total_external', 0)
+        sri_percentage = (sri_count / total_external * 100) if total_external > 0 else 0
+        sri_label = QLabel(f"Subresource Integrity: {sri_count}/{total_external} scripts ({sri_percentage:.1f}%)")
+        if sri_percentage < 50:
+            sri_label.setStyleSheet("color: orange; font-weight: bold;")
+        elif sri_percentage < 100:
+            sri_label.setStyleSheet("color: blue;")
+        else:
+            sri_label.setStyleSheet("color: green;")
+        security_grid.addWidget(sri_label, 0, 1)
+        
+        # Nonce Usage
+        nonce_status = "✅ Used" if security.get('nonce_usage') else "❌ Not used"
+        nonce_label = QLabel(f"Nonce Usage: {nonce_status}")
+        if not security.get('nonce_usage'):
+            nonce_label.setStyleSheet("color: orange;")
+        security_grid.addWidget(nonce_label, 1, 0)
+        
+        security_layout.addWidget(security_group)
+        
+        # Security issues tree
+        security_tree = QTreeWidget()
+        security_tree.setHeaderLabels(['Script', 'Issue', 'Severity', 'Pattern'])
+        security_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        
+        high_severity_count = 0
+        medium_severity_count = 0
+        low_severity_count = 0
+        
+        for i, script in enumerate(inline_scripts):
+            for issue in script.get('security_issues', []):
+                item = QTreeWidgetItem()
+                item.setText(0, f"Inline Script #{i+1}")
+                item.setText(1, issue.get('issue', ''))
+                item.setText(2, issue.get('severity', '').upper())
+                item.setText(3, issue.get('pattern', ''))
+                
+                # Color code by severity
+                severity = issue.get('severity', '').lower()
+                if severity == 'high':
+                    item.setBackground(2, QColor(255, 200, 200))
+                    high_severity_count += 1
+                elif severity == 'medium':
+                    item.setBackground(2, QColor(255, 255, 200))
+                    medium_severity_count += 1
+                else:
+                    item.setBackground(2, QColor(200, 255, 200))
+                    low_severity_count += 1
+                
+                security_tree.addTopLevelItem(item)
+        
+        security_summary = QLabel(f"Security Issues Found: {high_severity_count} High, {medium_severity_count} Medium, {low_severity_count} Low")
+        if high_severity_count > 0:
+            security_summary.setStyleSheet("color: red; font-weight: bold;")
+        elif medium_severity_count > 0:
+            security_summary.setStyleSheet("color: orange; font-weight: bold;")
+        else:
+            security_summary.setStyleSheet("color: green;")
+        
+        security_layout.addWidget(security_summary)
+        security_layout.addWidget(security_tree)
+        
+        tab_widget.addTab(security_widget, f"🔒 Security ({high_severity_count + medium_severity_count + low_severity_count})")
+        
+        # 2. Performance Analysis Tab
+        performance_widget = QWidget()
+        performance_layout = QVBoxLayout(performance_widget)
+        
+        perf_group = QGroupBox("⚡ Performance Analysis")
+        perf_grid = QGridLayout(perf_group)
+        
+        blocking_count = performance.get('blocking_scripts', 0)
+        async_count = performance.get('async_scripts', 0)
+        defer_count = performance.get('defer_scripts', 0)
+        
+        perf_grid.addWidget(QLabel(f"Blocking Scripts: {blocking_count}"), 0, 0)
+        perf_grid.addWidget(QLabel(f"Async Scripts: {async_count}"), 0, 1)
+        perf_grid.addWidget(QLabel(f"Deferred Scripts: {defer_count}"), 1, 0)
+        
+        # Performance recommendations
+        recommendations = []
+        if blocking_count > 3:
+            recommendations.append("⚠️ Consider using async/defer for non-critical scripts")
+        if async_count == 0 and defer_count == 0:
+            recommendations.append("💡 Consider using async/defer attributes for better performance")
+        if len(external_scripts) > 10:
+            recommendations.append("📦 Consider bundling scripts to reduce HTTP requests")
+        
+        if recommendations:
+            rec_text = QTextEdit()
+            rec_text.setMaximumHeight(100)
+            rec_text.setPlainText('\n'.join(recommendations))
+            rec_text.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7;")
+            perf_grid.addWidget(rec_text, 2, 0, 1, 2)
+        
+        performance_layout.addWidget(perf_group)
+        
+        # Script loading visualization
+        loading_tree = QTreeWidget()
+        loading_tree.setHeaderLabels(['Script', 'Loading Type', 'Impact', 'Recommendation'])
+        
+        for script in external_scripts:
+            item = QTreeWidgetItem()
+            item.setText(0, script.get('src', '')[-50:])  # Last 50 chars
+            loading_type = script.get('loading_type', 'blocking')
+            item.setText(1, loading_type.title())
+            
+            if loading_type == 'blocking':
+                item.setText(2, "High - Blocks page rendering")
+                item.setText(3, "Consider async/defer")
+                item.setBackground(1, QColor(255, 200, 200))
+            elif loading_type == 'defer':
+                item.setText(2, "Low - Executes after DOM")
+                item.setText(3, "Good for DOM manipulation")
+                item.setBackground(1, QColor(200, 255, 200))
+            else:  # async
+                item.setText(2, "Medium - Non-blocking")
+                item.setText(3, "Good for independent scripts")
+                item.setBackground(1, QColor(200, 200, 255))
+            
+            loading_tree.addTopLevelItem(item)
+        
+        performance_layout.addWidget(loading_tree)
+        tab_widget.addTab(performance_widget, f"⚡ Performance")
+        
+        # 3. Dependencies Tab
+        deps_widget = QWidget()
+        deps_layout = QVBoxLayout(deps_widget)
+        
+        deps_group = QGroupBox("📚 Detected Libraries & Frameworks")
+        deps_grid = QGridLayout(deps_group)
+        
+        libraries = dependencies.get('libraries', [])
+        if libraries:
+            libs_text = QTextEdit()
+            libs_text.setMaximumHeight(150)
+            libs_content = []
+            for lib in libraries:
+                libs_content.append(f"✅ {lib}")
+            libs_text.setPlainText('\n'.join(libs_content))
+            libs_text.setStyleSheet("background-color: #e8f5e8; font-family: monospace;")
+            deps_grid.addWidget(libs_text, 0, 0)
+        else:
+            no_libs_label = QLabel("No common libraries detected")
+            no_libs_label.setStyleSheet("color: gray; font-style: italic;")
+            deps_grid.addWidget(no_libs_label, 0, 0)
+        
+        deps_layout.addWidget(deps_group)
+        
+        # API Usage Analysis
+        api_group = QGroupBox("🔌 API Usage Analysis")
+        api_layout = QVBoxLayout(api_group)
+        
+        api_tree = QTreeWidget()
+        api_tree.setHeaderLabels(['Script', 'API Calls', 'DOM Manipulations'])
+        
+        for i, script in enumerate(inline_scripts):
+            if script.get('api_calls') or script.get('dom_manipulations'):
+                item = QTreeWidgetItem()
+                item.setText(0, f"Inline Script #{i+1}")
+                item.setText(1, ', '.join(script.get('api_calls', [])))
+                item.setText(2, ', '.join(script.get('dom_manipulations', [])))
+                api_tree.addTopLevelItem(item)
+        
+        api_layout.addWidget(api_tree)
+        deps_layout.addWidget(api_group)
+        
+        tab_widget.addTab(deps_widget, f"📚 Dependencies ({len(libraries)})")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        export_button = QPushButton("📊 Export Full Report")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def export_full_report():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"advanced_script_analysis_{timestamp}.txt"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export Advanced Script Analysis Report",
+                filename,
+                "Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    # Generate comprehensive report
+                    report_lines = []
+                    report_lines.append("ADVANCED SCRIPT ANALYSIS REPORT")
+                    report_lines.append("=" * 60)
+                    report_lines.append(f"URL: {base_url}")
+                    report_lines.append(f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    report_lines.append("")
+                    
+                    # Security Summary
+                    report_lines.append("SECURITY ANALYSIS")
+                    report_lines.append("-" * 30)
+                    report_lines.append(f"Content Security Policy: {'Present' if security.get('csp') else 'Missing'}")
+                    report_lines.append(f"Subresource Integrity: {sri_count}/{total_external} scripts ({sri_percentage:.1f}%)")
+                    report_lines.append(f"Nonce Usage: {'Yes' if security.get('nonce_usage') else 'No'}")
+                    report_lines.append(f"Security Issues: {high_severity_count} High, {medium_severity_count} Medium, {low_severity_count} Low")
+                    report_lines.append("")
+                    
+                    # Performance Summary
+                    report_lines.append("PERFORMANCE ANALYSIS")
+                    report_lines.append("-" * 30)
+                    report_lines.append(f"Blocking Scripts: {blocking_count}")
+                    report_lines.append(f"Async Scripts: {async_count}")
+                    report_lines.append(f"Deferred Scripts: {defer_count}")
+                    report_lines.append("")
+                    
+                    # Dependencies
+                    report_lines.append("DETECTED LIBRARIES")
+                    report_lines.append("-" * 30)
+                    if libraries:
+                        for lib in libraries:
+                            report_lines.append(f"- {lib}")
+                    else:
+                        report_lines.append("No common libraries detected")
+                    report_lines.append("")
+                    
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(report_lines))
+                    
+                    self.main_window.status_info.setText(f"✅ Advanced report exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        # Connect buttons
+        export_button.clicked.connect(export_full_report)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
+        
+        # Update main window status
+        total_issues = high_severity_count + medium_severity_count + low_severity_count
+        self.main_window.status_info.setText(f"🔍 Advanced analysis complete: {total_issues} security issues found")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
 
     def scan_broken_links(self, browser):
         """Scan the current page for broken links"""
