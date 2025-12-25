@@ -18,6 +18,7 @@ from session_tracker import SessionTracker
 from clipboard_manager import ClipboardManager
 from clipboard_dialog import ClipboardHistoryDialog
 from ping_tool import PingDialog
+from curl_tool import CurlDialog
 import ui_helpers
 import styles
 
@@ -53,6 +54,7 @@ class MainWindow(QMainWindow):
         self.clipboard_manager = ClipboardManager(self.profile_manager)
         self.clipboard_dialog = None  # Will be created when needed
         self.ping_dialog = None  # Will be created when needed
+        self.curl_dialog = None  # Will be created when needed
         
         self.session_tracker = SessionTracker(self.profile_manager)
 
@@ -207,6 +209,13 @@ class MainWindow(QMainWindow):
         ping_action.setStatusTip("Test domain/IP connectivity")
         ping_action.triggered.connect(self.show_ping_tool)
         tools_menu.addAction(ping_action)
+        
+        # Curl Tool action
+        curl_action = QAction("🌐 Curl Tool", self)
+        curl_action.setShortcut("Ctrl+U")
+        curl_action.setStatusTip("Make HTTP requests and test APIs")
+        curl_action.triggered.connect(self.show_curl_tool)
+        tools_menu.addAction(curl_action)
 
         # Profile menu
         self.profile_menu = self.menuBar().addMenu("👤 &Profile")
@@ -548,6 +557,16 @@ class MainWindow(QMainWindow):
             self.ping_dialog.raise_()
             self.ping_dialog.activateWindow()
     
+    def show_curl_tool(self):
+        """Show curl tool dialog"""
+        if self.curl_dialog is None or not self.curl_dialog.isVisible():
+            self.curl_dialog = CurlDialog(self)
+            self.curl_dialog.show()
+        else:
+            # Bring existing dialog to front
+            self.curl_dialog.raise_()
+            self.curl_dialog.activateWindow()
+    
     def show_urlbar_context_menu(self, position):
         """Show context menu for URL bar"""
         menu = QMenu(self)
@@ -569,12 +588,15 @@ class MainWindow(QMainWindow):
         select_all_action = menu.addAction("🔘 Select All")
         select_all_action.triggered.connect(self.urlbar.selectAll)
         
-        # Ping action if there's text
+        # Network testing actions if there's text
         url_text = self.urlbar.text().strip()
         if url_text:
             menu.addSeparator()
             ping_action = menu.addAction("🏓 Ping this domain")
             ping_action.triggered.connect(lambda: self.ping_from_urlbar(url_text))
+            
+            curl_action = menu.addAction("🌐 Test this URL")
+            curl_action.triggered.connect(lambda: self.curl_from_urlbar(url_text))
         
         menu.exec_(self.urlbar.mapToGlobal(position))
     
@@ -593,6 +615,18 @@ class MainWindow(QMainWindow):
         self.show_ping_tool()
         if self.ping_dialog:
             self.ping_dialog.set_target(domain)
+    
+    def curl_from_urlbar(self, url_text):
+        """Test URL with curl tool from URL bar"""
+        # Ensure URL has protocol
+        if not url_text.startswith(('http://', 'https://')):
+            url_text = 'https://' + url_text
+        
+        # Open curl tool with pre-filled URL
+        self.show_curl_tool()
+        if self.curl_dialog:
+            self.curl_dialog.url_input.setText(url_text)
+            self.curl_dialog.url_input.setFocus()
     
     def on_clipboard_changed(self, content):
         """Handle clipboard content change"""
