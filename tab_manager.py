@@ -3007,3 +3007,493 @@ class TabManager:
                 browser = widget.browser
                 settings = browser.settings()
                 settings.setFontSize(settings.DefaultFontSize, font_size)
+    
+    def analyze_ads(self, browser):
+        """Analyze advertisements without removing them"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("📊 Analyzing advertisements...")
+            
+            # JavaScript for ad analysis (detection only, no removal)
+            js_code = """
+            (function() {
+                var adAnalyzer = {
+                    detected: {
+                        scripts: [],
+                        iframes: [],
+                        images: [],
+                        containers: [],
+                        trackers: []
+                    },
+                    
+                    stats: {
+                        totalAds: 0,
+                        adNetworks: [],
+                        trackingScripts: 0,
+                        suspiciousElements: 0
+                    },
+                    
+                    // Ad network detection patterns
+                    adNetworks: {
+                        'Google Ads': ['googlesyndication.com', 'doubleclick.net', 'googleadservices.com'],
+                        'Facebook Ads': ['facebook.com/tr', 'connect.facebook.net'],
+                        'Amazon Ads': ['amazon-adsystem.com', 'assoc-amazon.com'],
+                        'Outbrain': ['outbrain.com', 'widgets.outbrain.com'],
+                        'Taboola': ['taboola.com', 'trc.taboola.com'],
+                        'Criteo': ['criteo.com', 'static.criteo.net'],
+                        'AppNexus': ['adnxs.com', 'ib.adnxs.com'],
+                        'Bing Ads': ['bat.bing.com', 'ads.yahoo.com'],
+                        'Twitter Ads': ['ads-twitter.com', 'analytics.twitter.com'],
+                        'LinkedIn Ads': ['ads.linkedin.com', 'snap.licdn.com']
+                    },
+                    
+                    // Common ad selectors for detection
+                    adSelectors: [
+                        '[class*="ad-"]', '[class*="ads-"]', '[class*="_ad_"]',
+                        '[id*="ad-"]', '[id*="ads-"]', '[id*="_ad_"]',
+                        '.advertisement', '.ads', '.ad', '.advert',
+                        '.google-ads', '.adsbygoogle', '.sponsored', '.promoted'
+                    ],
+                    
+                    analyzeScripts: function() {
+                        var scripts = document.getElementsByTagName('script');
+                        for (var i = 0; i < scripts.length; i++) {
+                            var script = scripts[i];
+                            if (script.src) {
+                                var isAd = false;
+                                var network = 'Unknown';
+                                
+                                // Check against known ad networks
+                                for (var networkName in this.adNetworks) {
+                                    var domains = this.adNetworks[networkName];
+                                    for (var j = 0; j < domains.length; j++) {
+                                        if (script.src.includes(domains[j])) {
+                                            isAd = true;
+                                            network = networkName;
+                                            if (!this.stats.adNetworks.includes(networkName)) {
+                                                this.stats.adNetworks.push(networkName);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                    if (isAd) break;
+                                }
+                                
+                                if (isAd) {
+                                    this.detected.scripts.push({
+                                        src: script.src,
+                                        network: network,
+                                        async: script.async,
+                                        defer: script.defer,
+                                        type: script.type || 'text/javascript'
+                                    });
+                                    this.stats.totalAds++;
+                                }
+                                
+                                // Check for tracking scripts
+                                var trackingPatterns = ['analytics', 'tracking', 'pixel', 'beacon'];
+                                for (var k = 0; k < trackingPatterns.length; k++) {
+                                    if (script.src.toLowerCase().includes(trackingPatterns[k])) {
+                                        this.stats.trackingScripts++;
+                                        this.detected.trackers.push({
+                                            src: script.src,
+                                            type: 'tracking_script'
+                                        });
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    
+                    analyzeIframes: function() {
+                        var iframes = document.getElementsByTagName('iframe');
+                        for (var i = 0; i < iframes.length; i++) {
+                            var iframe = iframes[i];
+                            if (iframe.src) {
+                                var isAd = false;
+                                var network = 'Unknown';
+                                
+                                // Check against ad networks
+                                for (var networkName in this.adNetworks) {
+                                    var domains = this.adNetworks[networkName];
+                                    for (var j = 0; j < domains.length; j++) {
+                                        if (iframe.src.includes(domains[j])) {
+                                            isAd = true;
+                                            network = networkName;
+                                            break;
+                                        }
+                                    }
+                                    if (isAd) break;
+                                }
+                                
+                                // Check common ad sizes
+                                var width = iframe.width || iframe.offsetWidth;
+                                var height = iframe.height || iframe.offsetHeight;
+                                var commonAdSizes = [
+                                    [728, 90], [300, 250], [160, 600], [320, 50],
+                                    [468, 60], [234, 60], [120, 600], [336, 280]
+                                ];
+                                
+                                var isCommonAdSize = false;
+                                for (var k = 0; k < commonAdSizes.length; k++) {
+                                    if (width == commonAdSizes[k][0] && height == commonAdSizes[k][1]) {
+                                        isCommonAdSize = true;
+                                        isAd = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if (isAd) {
+                                    this.detected.iframes.push({
+                                        src: iframe.src,
+                                        network: network,
+                                        width: width,
+                                        height: height,
+                                        isCommonAdSize: isCommonAdSize
+                                    });
+                                    this.stats.totalAds++;
+                                }
+                            }
+                        }
+                    },
+                    
+                    analyzeImages: function() {
+                        var images = document.getElementsByTagName('img');
+                        for (var i = 0; i < images.length; i++) {
+                            var img = images[i];
+                            if (img.src) {
+                                var isAd = false;
+                                var network = 'Unknown';
+                                
+                                // Check against ad networks
+                                for (var networkName in this.adNetworks) {
+                                    var domains = this.adNetworks[networkName];
+                                    for (var j = 0; j < domains.length; j++) {
+                                        if (img.src.includes(domains[j])) {
+                                            isAd = true;
+                                            network = networkName;
+                                            break;
+                                        }
+                                    }
+                                    if (isAd) break;
+                                }
+                                
+                                // Check for tracking pixels (1x1 images)
+                                if ((img.width === 1 && img.height === 1) || 
+                                    (img.naturalWidth === 1 && img.naturalHeight === 1)) {
+                                    this.detected.trackers.push({
+                                        src: img.src,
+                                        type: 'tracking_pixel',
+                                        network: network
+                                    });
+                                    this.stats.trackingScripts++;
+                                }
+                                
+                                if (isAd) {
+                                    this.detected.images.push({
+                                        src: img.src,
+                                        network: network,
+                                        width: img.width || img.naturalWidth,
+                                        height: img.height || img.naturalHeight,
+                                        alt: img.alt
+                                    });
+                                    this.stats.totalAds++;
+                                }
+                            }
+                        }
+                    },
+                    
+                    analyzeContainers: function() {
+                        for (var i = 0; i < this.adSelectors.length; i++) {
+                            try {
+                                var elements = document.querySelectorAll(this.adSelectors[i]);
+                                for (var j = 0; j < elements.length; j++) {
+                                    var element = elements[j];
+                                    this.detected.containers.push({
+                                        tag: element.tagName,
+                                        className: element.className,
+                                        id: element.id,
+                                        selector: this.adSelectors[i],
+                                        width: element.offsetWidth,
+                                        height: element.offsetHeight,
+                                        visible: element.offsetParent !== null
+                                    });
+                                    this.stats.suspiciousElements++;
+                                }
+                            } catch (e) {
+                                // Ignore invalid selectors
+                            }
+                        }
+                    },
+                    
+                    run: function() {
+                        console.log('📊 Starting ad analysis...');
+                        
+                        this.analyzeScripts();
+                        this.analyzeIframes();
+                        this.analyzeImages();
+                        this.analyzeContainers();
+                        
+                        console.log('📊 Ad analysis complete:', this.stats);
+                        
+                        return {
+                            detected: this.detected,
+                            stats: this.stats,
+                            summary: 'Found ' + this.stats.totalAds + ' advertisements'
+                        };
+                    }
+                };
+                
+                return adAnalyzer.run();
+            })();
+            """
+            
+            def process_ad_analysis(result):
+                if not result:
+                    self.main_window.status_info.setText("ℹ️ No ad analysis data available")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                stats = result.get('stats', {})
+                total_ads = stats.get('totalAds', 0)
+                
+                # Show analysis results dialog
+                self.show_ad_analysis_dialog(result, current_url, browser)
+                
+                # Update status
+                if total_ads > 0:
+                    self.main_window.status_info.setText(f"📊 Analysis complete: {total_ads} ads detected")
+                else:
+                    self.main_window.status_info.setText("📊 Analysis complete: No ads detected")
+                QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+            
+            # Execute JavaScript to analyze ads
+            page.runJavaScript(js_code, process_ad_analysis)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Ad analysis error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_ad_analysis_dialog(self, result, base_url, browser):
+        """Show dialog with ad analysis results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView,
+                                   QGroupBox, QGridLayout, QFileDialog)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        from datetime import datetime
+        
+        detected = result.get('detected', {})
+        stats = result.get('stats', {})
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"📊 Ad Analysis Report - {stats.get('totalAds', 0)} ads detected")
+        dialog.setMinimumSize(1000, 700)
+        dialog.resize(1200, 800)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"Advertisement Analysis for: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #fff3cd; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # Statistics overview
+        stats_group = QGroupBox("📈 Advertisement Statistics")
+        stats_grid = QGridLayout(stats_group)
+        
+        stats_grid.addWidget(QLabel(f"Total Ads Detected: {stats.get('totalAds', 0)}"), 0, 0)
+        stats_grid.addWidget(QLabel(f"Tracking Scripts: {stats.get('trackingScripts', 0)}"), 0, 1)
+        stats_grid.addWidget(QLabel(f"Suspicious Elements: {stats.get('suspiciousElements', 0)}"), 1, 0)
+        
+        # Ad networks
+        networks = stats.get('adNetworks', [])
+        networks_text = ', '.join(networks) if networks else 'None detected'
+        networks_label = QLabel(f"Ad Networks: {networks_text}")
+        networks_label.setWordWrap(True)
+        stats_grid.addWidget(networks_label, 1, 1)
+        
+        layout.addWidget(stats_group)
+        
+        # Tab widget for different ad types
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Scripts tab
+        scripts_widget = QWidget()
+        scripts_layout = QVBoxLayout(scripts_widget)
+        
+        scripts_tree = QTreeWidget()
+        scripts_tree.setHeaderLabels(['Source', 'Network', 'Type', 'Loading'])
+        scripts_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        
+        for script in detected.get('scripts', []):
+            item = QTreeWidgetItem()
+            item.setText(0, script.get('src', '')[-60:])  # Last 60 chars
+            item.setText(1, script.get('network', 'Unknown'))
+            item.setText(2, script.get('type', 'text/javascript'))
+            
+            loading = []
+            if script.get('async'):
+                loading.append('async')
+            if script.get('defer'):
+                loading.append('defer')
+            item.setText(3, ', '.join(loading) if loading else 'blocking')
+            
+            scripts_tree.addTopLevelItem(item)
+        
+        scripts_layout.addWidget(scripts_tree)
+        tab_widget.addTab(scripts_widget, f"📜 Scripts ({len(detected.get('scripts', []))})")
+        
+        # Iframes tab
+        iframes_widget = QWidget()
+        iframes_layout = QVBoxLayout(iframes_widget)
+        
+        iframes_tree = QTreeWidget()
+        iframes_tree.setHeaderLabels(['Source', 'Network', 'Dimensions', 'Ad Size'])
+        
+        for iframe in detected.get('iframes', []):
+            item = QTreeWidgetItem()
+            item.setText(0, iframe.get('src', '')[-60:])
+            item.setText(1, iframe.get('network', 'Unknown'))
+            item.setText(2, f"{iframe.get('width', 0)}x{iframe.get('height', 0)}")
+            item.setText(3, 'Yes' if iframe.get('isCommonAdSize') else 'No')
+            
+            if iframe.get('isCommonAdSize'):
+                item.setBackground(3, QColor(255, 200, 200))
+            
+            iframes_tree.addTopLevelItem(item)
+        
+        iframes_layout.addWidget(iframes_tree)
+        tab_widget.addTab(iframes_widget, f"🖼️ Iframes ({len(detected.get('iframes', []))})")
+        
+        # Images tab
+        images_widget = QWidget()
+        images_layout = QVBoxLayout(images_widget)
+        
+        images_tree = QTreeWidget()
+        images_tree.setHeaderLabels(['Source', 'Network', 'Dimensions', 'Alt Text'])
+        
+        for image in detected.get('images', []):
+            item = QTreeWidgetItem()
+            item.setText(0, image.get('src', '')[-60:])
+            item.setText(1, image.get('network', 'Unknown'))
+            item.setText(2, f"{image.get('width', 0)}x{image.get('height', 0)}")
+            item.setText(3, image.get('alt', '')[:30])
+            
+            images_tree.addTopLevelItem(item)
+        
+        images_layout.addWidget(images_tree)
+        tab_widget.addTab(images_widget, f"🖼️ Images ({len(detected.get('images', []))})")
+        
+        # Trackers tab
+        trackers_widget = QWidget()
+        trackers_layout = QVBoxLayout(trackers_widget)
+        
+        trackers_tree = QTreeWidget()
+        trackers_tree.setHeaderLabels(['Source', 'Type', 'Network'])
+        
+        for tracker in detected.get('trackers', []):
+            item = QTreeWidgetItem()
+            item.setText(0, tracker.get('src', '')[-60:])
+            item.setText(1, tracker.get('type', 'unknown'))
+            item.setText(2, tracker.get('network', 'Unknown'))
+            
+            # Color code by type
+            if tracker.get('type') == 'tracking_pixel':
+                item.setBackground(1, QColor(255, 200, 200))
+            else:
+                item.setBackground(1, QColor(255, 255, 200))
+            
+            trackers_tree.addTopLevelItem(item)
+        
+        trackers_layout.addWidget(trackers_tree)
+        tab_widget.addTab(trackers_widget, f"🔍 Trackers ({len(detected.get('trackers', []))})")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        remove_ads_button = QPushButton("🚫 Remove Detected Ads")
+        export_button = QPushButton("📊 Export Report")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(remove_ads_button)
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def remove_ads():
+            dialog.accept()
+            # Run the ad removal tool
+            self.scan_and_remove_ads(browser)
+        
+        def export_report():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"ad_analysis_report_{timestamp}.txt"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export Ad Analysis Report",
+                filename,
+                "Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    report_lines = []
+                    report_lines.append("ADVERTISEMENT ANALYSIS REPORT")
+                    report_lines.append("=" * 60)
+                    report_lines.append(f"URL: {base_url}")
+                    report_lines.append(f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    report_lines.append("")
+                    
+                    # Statistics
+                    report_lines.append("STATISTICS")
+                    report_lines.append("-" * 30)
+                    report_lines.append(f"Total Ads Detected: {stats.get('totalAds', 0)}")
+                    report_lines.append(f"Tracking Scripts: {stats.get('trackingScripts', 0)}")
+                    report_lines.append(f"Suspicious Elements: {stats.get('suspiciousElements', 0)}")
+                    report_lines.append(f"Ad Networks: {', '.join(stats.get('adNetworks', []))}")
+                    report_lines.append("")
+                    
+                    # Detailed breakdown
+                    if detected.get('scripts'):
+                        report_lines.append("AD SCRIPTS")
+                        report_lines.append("-" * 20)
+                        for script in detected['scripts']:
+                            report_lines.append(f"- {script.get('src', '')}")
+                            report_lines.append(f"  Network: {script.get('network', 'Unknown')}")
+                        report_lines.append("")
+                    
+                    if detected.get('trackers'):
+                        report_lines.append("TRACKING ELEMENTS")
+                        report_lines.append("-" * 20)
+                        for tracker in detected['trackers']:
+                            report_lines.append(f"- {tracker.get('src', '')}")
+                            report_lines.append(f"  Type: {tracker.get('type', 'unknown')}")
+                        report_lines.append("")
+                    
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(report_lines))
+                    
+                    self.main_window.status_info.setText(f"✅ Report exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        # Connect buttons
+        remove_ads_button.clicked.connect(remove_ads)
+        export_button.clicked.connect(export_report)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
