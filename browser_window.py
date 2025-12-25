@@ -19,6 +19,7 @@ from clipboard_manager import ClipboardManager
 from clipboard_dialog import ClipboardHistoryDialog
 from ping_tool import PingDialog
 from curl_tool import CurlDialog
+from command_line_tool import CommandLineWidget
 import ui_helpers
 import styles
 
@@ -38,11 +39,14 @@ class MainWindow(QMainWindow):
         self.config_manager = ConfigManager(self.profile_manager)
         self.config_manager.load()
         
-        # API mode state
+        # Mode states
         self.api_mode_enabled = False
         self.api_tab_widget = None
         self.api_tab_index = None
-        self.stored_web_tabs = []  # Store web tabs when in API mode
+        self.cmd_mode_enabled = False
+        self.cmd_tab_widget = None
+        self.cmd_tab_index = None
+        self.stored_web_tabs = []  # Store web tabs when in special modes
         
         self.history_manager = HistoryManager(self.profile_manager)
         self.history_manager.enabled = self.config_manager.get("history_enabled", False)
@@ -267,8 +271,9 @@ class MainWindow(QMainWindow):
         self.mode_dropdown = QComboBox()
         self.mode_dropdown.addItem("🌐 Web Browser", "web")
         self.mode_dropdown.addItem("🔧 API Tester", "api")
+        self.mode_dropdown.addItem("💻 Command Line", "cmd")
         self.mode_dropdown.setCurrentIndex(0)  # Default to web mode
-        self.mode_dropdown.setMinimumWidth(120)
+        self.mode_dropdown.setMinimumWidth(140)  # Increased width for new option
         self.update_dropdown_style()
         self.mode_dropdown.currentTextChanged.connect(self.on_mode_changed)
         mode_layout.addWidget(self.mode_dropdown)
@@ -434,6 +439,7 @@ class MainWindow(QMainWindow):
         if "API Tester" in mode_text:
             # Switch to API mode
             self.api_mode_enabled = True
+            self.cmd_mode_enabled = False
             self.status_info.setText("API Mode: Ready for testing")
             
             # Hide navigation toolbar (home, reload, URL bar)
@@ -442,18 +448,40 @@ class MainWindow(QMainWindow):
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
             
+            # Remove command line tab if exists
+            self.remove_cmd_tabs()
+            
             # Add API tab
             self.add_api_tab()
+        elif "Command Line" in mode_text:
+            # Switch to command line mode
+            self.cmd_mode_enabled = True
+            self.api_mode_enabled = False
+            self.status_info.setText("Command Line Mode: Ready for terminal commands")
+            
+            # Hide navigation toolbar
+            self.navigation_toolbar.setVisible(False)
+            
+            # Store current web tabs and remove them
+            self.store_and_remove_web_tabs()
+            
+            # Remove API tab if exists
+            self.remove_api_tabs()
+            
+            # Add command line tab
+            self.add_cmd_tab()
         else:
             # Switch to web mode
             self.api_mode_enabled = False
+            self.cmd_mode_enabled = False
             self.status_info.setText("Web Mode: Ready for browsing")
             
             # Show navigation toolbar
             self.navigation_toolbar.setVisible(True)
             
-            # Remove API tab and restore web tabs
+            # Remove special mode tabs and restore web tabs
             self.remove_api_tabs()
+            self.remove_cmd_tabs()
             self.restore_web_tabs()
     
     def toggle_api_mode(self):
@@ -542,6 +570,27 @@ class MainWindow(QMainWindow):
             self.tabs.removeTab(self.api_tab_index)
             self.api_tab_widget = None
             self.api_tab_index = None
+    
+    def add_cmd_tab(self):
+        """Add a new command line tab"""
+        # Create command line interface widget
+        self.cmd_tab_widget = CommandLineWidget(self)
+        
+        # Add the command line tab
+        tab_index = self.tabs.addTab(self.cmd_tab_widget, "💻 Terminal")
+        self.tabs.setCurrentIndex(tab_index)
+        
+        # Store reference to command line tab
+        self.cmd_tab_index = tab_index
+    
+    def remove_cmd_tabs(self):
+        """Remove command line tabs"""
+        if hasattr(self, 'cmd_tab_index') and self.cmd_tab_index is not None:
+            self.tabs.removeTab(self.cmd_tab_index)
+            if self.cmd_tab_widget:
+                self.cmd_tab_widget.closeEvent(None)  # Clean up any running processes
+            self.cmd_tab_widget = None
+            self.cmd_tab_index = None
     
     def show_clipboard_manager(self):
         """Show clipboard manager dialog"""

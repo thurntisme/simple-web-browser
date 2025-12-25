@@ -92,7 +92,7 @@ class TabManager:
             self.main_window.update_urlbar(qurl, browser)
             self.main_window.update_title(browser)
         else:
-            # This might be an API tab or other non-browser tab
+            # This might be an API tab, command line tab, or other non-browser tab
             current_widget = self.tabs.currentWidget()
             if current_widget and hasattr(self.main_window, 'api_tab_widget') and current_widget == self.main_window.api_tab_widget:
                 # This is the API tab
@@ -100,6 +100,12 @@ class TabManager:
                 self.main_window.setWindowTitle(f"API Tester - {APP_NAME}")
                 self.main_window.status_title.setText("API Testing Mode")
                 self.main_window.status_info.setText("Ready for API testing")
+            elif current_widget and hasattr(self.main_window, 'cmd_tab_widget') and current_widget == self.main_window.cmd_tab_widget:
+                # This is the command line tab
+                self.main_window.urlbar.setText("Command Line Mode")
+                self.main_window.setWindowTitle(f"Terminal - {APP_NAME}")
+                self.main_window.status_title.setText("Command Line Mode")
+                self.main_window.status_info.setText("Ready for terminal commands")
 
     def close_current_tab(self, i):
         """Close tab if more than minimum tabs exist"""
