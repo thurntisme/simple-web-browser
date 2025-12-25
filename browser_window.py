@@ -111,15 +111,15 @@ class MainWindow(QMainWindow):
         tabs_container_layout.setSpacing(0)
         
         # Create top bar with sidebar toggle button
-        top_bar = QWidget()
-        top_bar.setFixedHeight(32)
-        top_bar.setStyleSheet("""
+        self.top_bar = QWidget()
+        self.top_bar.setFixedHeight(32)
+        self.top_bar.setStyleSheet("""
             QWidget {
                 background-color: #f8f9fa;
                 border-bottom: 1px solid #dee2e6;
             }
         """)
-        top_bar_layout = QHBoxLayout(top_bar)
+        top_bar_layout = QHBoxLayout(self.top_bar)
         top_bar_layout.setContentsMargins(8, 4, 8, 4)
         top_bar_layout.setSpacing(8)
         
@@ -170,7 +170,10 @@ class MainWindow(QMainWindow):
         top_bar_layout.addStretch()
         
         # Add top bar to container
-        tabs_container_layout.addWidget(top_bar)
+        tabs_container_layout.addWidget(self.top_bar)
+        
+        # Initially show top bar only in web mode (default mode)
+        self.top_bar.setVisible(True)
         
         # Create tabs
         self.tabs = QTabWidget()
@@ -590,14 +593,12 @@ class MainWindow(QMainWindow):
             # Hide navigation toolbar (home, reload, URL bar)
             self.navigation_toolbar.setVisible(False)
             
+            # Hide top bar (sidebar toggle and title) in non-web modes
+            self.top_bar.setVisible(False)
+            
             # Hide sidebar in non-web modes
             if self.sidebar_widget:
                 self.sidebar_widget.setVisible(False)
-            
-            # Disable sidebar toggle button in non-web modes
-            if hasattr(self, 'sidebar_toggle_btn'):
-                self.sidebar_toggle_btn.setEnabled(False)
-                self.sidebar_toggle_btn.setToolTip("Sidebar only available in Web Browser mode")
             
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
@@ -618,14 +619,12 @@ class MainWindow(QMainWindow):
             # Hide navigation toolbar
             self.navigation_toolbar.setVisible(False)
             
+            # Hide top bar (sidebar toggle and title) in non-web modes
+            self.top_bar.setVisible(False)
+            
             # Hide sidebar in non-web modes
             if self.sidebar_widget:
                 self.sidebar_widget.setVisible(False)
-            
-            # Disable sidebar toggle button in non-web modes
-            if hasattr(self, 'sidebar_toggle_btn'):
-                self.sidebar_toggle_btn.setEnabled(False)
-                self.sidebar_toggle_btn.setToolTip("Sidebar only available in Web Browser mode")
             
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
@@ -646,14 +645,12 @@ class MainWindow(QMainWindow):
             # Hide navigation toolbar
             self.navigation_toolbar.setVisible(False)
             
+            # Hide top bar (sidebar toggle and title) in non-web modes
+            self.top_bar.setVisible(False)
+            
             # Hide sidebar in non-web modes
             if self.sidebar_widget:
                 self.sidebar_widget.setVisible(False)
-            
-            # Disable sidebar toggle button in non-web modes
-            if hasattr(self, 'sidebar_toggle_btn'):
-                self.sidebar_toggle_btn.setEnabled(False)
-                self.sidebar_toggle_btn.setToolTip("Sidebar only available in Web Browser mode")
             
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
@@ -674,14 +671,12 @@ class MainWindow(QMainWindow):
             # Show navigation toolbar
             self.navigation_toolbar.setVisible(True)
             
+            # Show top bar (sidebar toggle and title) in web mode
+            self.top_bar.setVisible(True)
+            
             # Show sidebar only in web mode
             if self.sidebar_widget:
                 self.sidebar_widget.setVisible(self.sidebar_visible)
-            
-            # Enable sidebar toggle button in web mode
-            if hasattr(self, 'sidebar_toggle_btn'):
-                self.sidebar_toggle_btn.setEnabled(True)
-                self.sidebar_toggle_btn.setToolTip("Toggle sidebar")
             
             # Remove special mode tabs and restore web tabs
             self.remove_api_tabs()
@@ -746,8 +741,13 @@ class MainWindow(QMainWindow):
     def restore_web_tabs(self):
         """Restore previously stored web tabs"""
         if not self.stored_web_tabs:
-            # If no stored tabs, create a default one
-            self.add_new_tab()
+            # If no stored tabs, load the welcome page or home page based on settings
+            use_welcome = self.config_manager.get("use_welcome_page", True)
+            if use_welcome:
+                self.add_new_tab(self.get_welcome_page_url(), "Welcome")
+            else:
+                home_url = self.config_manager.get("home_url", DEFAULT_HOME_URL)
+                self.add_new_tab(QUrl(home_url), DEFAULT_NEW_TAB_LABEL)
             return
             
         # Restore all stored tabs
