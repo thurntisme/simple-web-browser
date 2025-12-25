@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
         self.stored_web_tabs = []  # Store web tabs when in special modes
         
         # Sidebar state
-        self.sidebar_visible = True
+        self.sidebar_visible = False
         self.sidebar_widget = None
         
         self.history_manager = HistoryManager(self.profile_manager)
@@ -101,6 +101,7 @@ class MainWindow(QMainWindow):
         
         # Create sidebar
         self.sidebar_widget = SidebarWidget(self)
+        self.sidebar_widget.setVisible(self.sidebar_visible)  # Set initial visibility
         main_layout.addWidget(self.sidebar_widget)
         
         # Create container for tabs and sidebar toggle
@@ -128,7 +129,7 @@ class MainWindow(QMainWindow):
         self.sidebar_toggle_btn.setFixedSize(24, 24)
         self.sidebar_toggle_btn.setStatusTip("Toggle sidebar")
         self.sidebar_toggle_btn.setCheckable(True)
-        self.sidebar_toggle_btn.setChecked(True)
+        self.sidebar_toggle_btn.setChecked(False)
         self.sidebar_toggle_btn.clicked.connect(self.toggle_sidebar)
         self.sidebar_toggle_btn.setStyleSheet("""
             QPushButton {
@@ -154,7 +155,7 @@ class MainWindow(QMainWindow):
         top_bar_layout.addWidget(self.sidebar_toggle_btn)
         
         # Add title label
-        self.title_label = QLabel("Browser Tabs")
+        self.title_label = QLabel("Browser Tabs (Sidebar Hidden)")
         self.title_label.setStyleSheet("""
             QLabel {
                 font-size: 11px;
