@@ -337,17 +337,17 @@ class MainWindow(QMainWindow):
         self.navigation_toolbar.addWidget(self.history_toggle_btn)
 
     def setup_menus(self):
-        """Setup application menus with icons"""
+        """Setup application menus"""
         # Bookmarks menu
-        self.bookmarks_menu = self.menuBar().addMenu("📚 &Bookmarks")
+        self.bookmarks_menu = self.menuBar().addMenu("&Bookmarks")
         ui_helpers.update_bookmarks_menu(self)
 
         # History menu
-        self.history_menu = self.menuBar().addMenu("📜 &History")
+        self.history_menu = self.menuBar().addMenu("&History")
         ui_helpers.update_history_menu(self)
 
         # Tools menu
-        tools_menu = self.menuBar().addMenu("🔧 &Tools")
+        tools_menu = self.menuBar().addMenu("&Tools")
         
         dev_tools_action = QAction("🔍 Toggle Dev Tools", self)
         dev_tools_action.setShortcut("F12")
@@ -461,11 +461,11 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(add_to_sidebar_action)
 
         # Profile menu
-        self.profile_menu = self.menuBar().addMenu("👤 &Profile")
+        self.profile_menu = self.menuBar().addMenu("&Profile")
         ui_helpers.update_profile_menu(self)
 
         # Help menu
-        help_menu = self.menuBar().addMenu("❓ &Help")
+        help_menu = self.menuBar().addMenu("&Help")
         about_action = QAction("ℹ️ About " + APP_NAME, self)
         about_action.setStatusTip(f"Find out more about {APP_NAME}")
         about_action.triggered.connect(self.about)
