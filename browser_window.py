@@ -239,6 +239,14 @@ class MainWindow(QMainWindow):
         self.urlbar.customContextMenuRequested.connect(self.show_urlbar_context_menu)
         self.navigation_toolbar.addWidget(self.urlbar)
         
+        # Ads Block dropdown
+        self.ads_block_btn = QPushButton("🚫 Ads Block")
+        self.ads_block_btn.setObjectName("adsBlockBtn")
+        self.ads_block_btn.setMaximumWidth(100)
+        self.ads_block_btn.setStatusTip("Ad blocking tools")
+        self.ads_block_btn.clicked.connect(self.show_ads_block_menu)
+        self.navigation_toolbar.addWidget(self.ads_block_btn)
+        
         # Open with browser dropdown button
         self.open_with_btn = QPushButton("🌐")
         self.open_with_btn.setObjectName("openWithBtn")
@@ -960,6 +968,72 @@ class MainWindow(QMainWindow):
         
         menu.exec_(self.urlbar.mapToGlobal(position))
     
+    def show_ads_block_menu(self):
+        """Show ads block dropdown menu"""
+        menu = QMenu(self)
+        
+        # Get current browser
+        current_browser = self.tab_manager.get_current_browser()
+        
+        if current_browser and not (self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled):
+            # Scan & Remove Ads
+            scan_remove_action = QAction("🚫 Scan & Remove Ads", self)
+            scan_remove_action.setStatusTip("Detect and remove advertisements from the current page")
+            scan_remove_action.triggered.connect(lambda: self.tab_manager.scan_and_remove_ads(current_browser))
+            menu.addAction(scan_remove_action)
+            
+            # Ad Analysis Report
+            analysis_action = QAction("📊 Ad Analysis Report", self)
+            analysis_action.setStatusTip("Analyze advertisements without removing them")
+            analysis_action.triggered.connect(lambda: self.tab_manager.analyze_ads(current_browser))
+            menu.addAction(analysis_action)
+            
+            menu.addSeparator()
+            
+            # Quick Actions
+            quick_menu = menu.addMenu("⚡ Quick Actions")
+            
+            # Block Popups
+            block_popups_action = QAction("🪟 Block Popups", self)
+            block_popups_action.setStatusTip("Block popup windows and overlays")
+            block_popups_action.triggered.connect(lambda: self.block_popups(current_browser))
+            quick_menu.addAction(block_popups_action)
+            
+            # Remove Tracking
+            remove_tracking_action = QAction("🔍 Remove Tracking", self)
+            remove_tracking_action.setStatusTip("Remove tracking scripts and pixels")
+            remove_tracking_action.triggered.connect(lambda: self.remove_tracking(current_browser))
+            quick_menu.addAction(remove_tracking_action)
+            
+            # Clean Page
+            clean_page_action = QAction("🧹 Clean Page", self)
+            clean_page_action.setStatusTip("Remove all promotional content")
+            clean_page_action.triggered.connect(lambda: self.clean_page(current_browser))
+            quick_menu.addAction(clean_page_action)
+            
+            menu.addSeparator()
+            
+            # Settings
+            settings_action = QAction("⚙️ Ad Block Settings", self)
+            settings_action.setStatusTip("Configure ad blocking preferences")
+            settings_action.triggered.connect(self.show_ad_block_settings)
+            menu.addAction(settings_action)
+            
+        else:
+            # Disabled state
+            disabled_action = QAction("❌ Ad blocking not available", self)
+            disabled_action.setEnabled(False)
+            menu.addAction(disabled_action)
+            
+            info_action = QAction("ℹ️ Only works on web pages", self)
+            info_action.setEnabled(False)
+            menu.addAction(info_action)
+        
+        # Show menu at button position
+        button_rect = self.ads_block_btn.rect()
+        menu_pos = self.ads_block_btn.mapToGlobal(QPoint(0, button_rect.height()))
+        menu.exec_(menu_pos)
+    
     def ping_from_urlbar(self, url_text):
         """Ping domain from URL bar"""
         # Extract domain from URL
@@ -1017,6 +1091,238 @@ class MainWindow(QMainWindow):
     def apply_font_size(self, font_size):
         """Apply font size to all tabs"""
         self.tab_manager.apply_font_size(font_size)
+    
+    def block_popups(self, browser):
+        """Block popup windows and overlays"""
+        try:
+            page = browser.page()
+            
+            # JavaScript to remove popup elements
+            js_code = """
+            (function() {
+                var removed = 0;
+                
+                // Remove fixed position elements with high z-index (likely popups)
+                var allElements = document.querySelectorAll('*');
+                for (var i = 0; i < allElements.length; i++) {
+                    var element = allElements[i];
+                    var style = window.getComputedStyle(element);
+                    
+                    if (style.position === 'fixed' && 
+                        (parseInt(style.zIndex) > 1000 || style.zIndex === 'auto')) {
+                        
+                        // Check if it covers significant screen area (likely popup)
+                        var rect = element.getBoundingClientRect();
+                        var screenArea = window.innerWidth * window.innerHeight;
+                        var elementArea = rect.width * rect.height;
+                        
+                        if (elementArea > screenArea * 0.05) { // More than 5% of screen
+                            element.style.display = 'none';
+                            element.remove();
+                            removed++;
+                        }
+                    }
+                }
+                
+                // Remove common popup selectors
+                var popupSelectors = [
+                    '.popup', '.modal', '.overlay', '.lightbox', '.dialog',
+                    '[class*="popup"]', '[class*="modal"]', '[class*="overlay"]'
+                ];
+                
+                for (var j = 0; j < popupSelectors.length; j++) {
+                    try {
+                        var elements = document.querySelectorAll(popupSelectors[j]);
+                        for (var k = 0; k < elements.length; k++) {
+                            elements[k].style.display = 'none';
+                            elements[k].remove();
+                            removed++;
+                        }
+                    } catch (e) {
+                        // Ignore invalid selectors
+                    }
+                }
+                
+                return removed;
+            })();
+            """
+            
+            def process_result(removed_count):
+                if removed_count > 0:
+                    self.status_info.setText(f"🪟 Blocked {removed_count} popup elements")
+                else:
+                    self.status_info.setText("🪟 No popups found to block")
+                QTimer.singleShot(3000, lambda: self.status_info.setText(""))
+            
+            page.runJavaScript(js_code, process_result)
+            
+        except Exception as e:
+            self.status_info.setText(f"❌ Popup blocking error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.status_info.setText(""))
+    
+    def remove_tracking(self, browser):
+        """Remove tracking scripts and pixels"""
+        try:
+            page = browser.page()
+            
+            # JavaScript to remove tracking elements
+            js_code = """
+            (function() {
+                var removed = 0;
+                
+                // Remove tracking scripts
+                var scripts = document.getElementsByTagName('script');
+                for (var i = scripts.length - 1; i >= 0; i--) {
+                    var script = scripts[i];
+                    if (script.src) {
+                        var trackingDomains = [
+                            'google-analytics.com', 'googletagmanager.com', 'facebook.com/tr',
+                            'scorecardresearch.com', 'quantserve.com', 'addthis.com',
+                            'doubleclick.net', 'googlesyndication.com'
+                        ];
+                        
+                        for (var j = 0; j < trackingDomains.length; j++) {
+                            if (script.src.includes(trackingDomains[j])) {
+                                script.remove();
+                                removed++;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Remove tracking pixels (1x1 images)
+                var images = document.getElementsByTagName('img');
+                for (var k = images.length - 1; k >= 0; k--) {
+                    var img = images[k];
+                    if ((img.width === 1 && img.height === 1) || 
+                        (img.naturalWidth === 1 && img.naturalHeight === 1)) {
+                        img.remove();
+                        removed++;
+                    }
+                }
+                
+                return removed;
+            })();
+            """
+            
+            def process_result(removed_count):
+                if removed_count > 0:
+                    self.status_info.setText(f"🔍 Removed {removed_count} tracking elements")
+                else:
+                    self.status_info.setText("🔍 No tracking elements found")
+                QTimer.singleShot(3000, lambda: self.status_info.setText(""))
+            
+            page.runJavaScript(js_code, process_result)
+            
+        except Exception as e:
+            self.status_info.setText(f"❌ Tracking removal error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.status_info.setText(""))
+    
+    def clean_page(self, browser):
+        """Remove all promotional content"""
+        try:
+            page = browser.page()
+            
+            # JavaScript to clean promotional content
+            js_code = """
+            (function() {
+                var removed = 0;
+                
+                // Remove promotional selectors
+                var promoSelectors = [
+                    '.sponsored', '.promoted', '.advertisement', '.promo',
+                    '[class*="sponsor"]', '[class*="promo"]', '[class*="deal"]',
+                    '[class*="offer"]', '[class*="sale"]', '[class*="discount"]'
+                ];
+                
+                for (var i = 0; i < promoSelectors.length; i++) {
+                    try {
+                        var elements = document.querySelectorAll(promoSelectors[i]);
+                        for (var j = 0; j < elements.length; j++) {
+                            elements[j].style.display = 'none';
+                            elements[j].remove();
+                            removed++;
+                        }
+                    } catch (e) {
+                        // Ignore invalid selectors
+                    }
+                }
+                
+                return removed;
+            })();
+            """
+            
+            def process_result(removed_count):
+                if removed_count > 0:
+                    self.status_info.setText(f"🧹 Cleaned {removed_count} promotional elements")
+                else:
+                    self.status_info.setText("🧹 Page already clean")
+                QTimer.singleShot(3000, lambda: self.status_info.setText(""))
+            
+            page.runJavaScript(js_code, process_result)
+            
+        except Exception as e:
+            self.status_info.setText(f"❌ Page cleaning error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.status_info.setText(""))
+    
+    def show_ad_block_settings(self):
+        """Show ad block settings dialog"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton, QGroupBox, QGridLayout
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("⚙️ Ad Block Settings")
+        dialog.setMinimumSize(400, 300)
+        dialog.resize(500, 400)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel("🚫 Ad Blocking Configuration")
+        header_label.setStyleSheet("font-weight: bold; font-size: 14px; padding: 10px; background-color: #f0f0f0; border-radius: 5px;")
+        layout.addWidget(header_label)
+        
+        # Auto-blocking options
+        auto_group = QGroupBox("🔄 Automatic Blocking")
+        auto_layout = QGridLayout(auto_group)
+        
+        self.auto_block_ads_cb = QCheckBox("Block ads on page load")
+        self.auto_block_ads_cb.setChecked(self.config_manager.get("auto_block_ads", False))
+        auto_layout.addWidget(self.auto_block_ads_cb, 0, 0)
+        
+        self.auto_block_popups_cb = QCheckBox("Block popups automatically")
+        self.auto_block_popups_cb.setChecked(self.config_manager.get("auto_block_popups", False))
+        auto_layout.addWidget(self.auto_block_popups_cb, 0, 1)
+        
+        layout.addWidget(auto_group)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        save_button = QPushButton("💾 Save Settings")
+        cancel_button = QPushButton("❌ Cancel")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(save_button)
+        button_layout.addWidget(cancel_button)
+        layout.addLayout(button_layout)
+        
+        def save_settings():
+            # Save settings to config
+            self.config_manager.set("auto_block_ads", self.auto_block_ads_cb.isChecked())
+            self.config_manager.set("auto_block_popups", self.auto_block_popups_cb.isChecked())
+            self.config_manager.save()
+            
+            self.status_info.setText("⚙️ Ad block settings saved")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+            dialog.accept()
+        
+        # Connect buttons
+        save_button.clicked.connect(save_settings)
+        cancel_button.clicked.connect(dialog.reject)
+        
+        # Show dialog
+        dialog.exec_()
     
     # UI update methods
     def update_title(self, browser):
