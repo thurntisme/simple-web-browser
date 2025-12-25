@@ -315,6 +315,13 @@ class MainWindow(QMainWindow):
         curl_action.triggered.connect(self.show_curl_tool)
         tools_menu.addAction(curl_action)
         
+        # Screenshot action
+        screenshot_action = QAction("📸 Take Screenshot", self)
+        screenshot_action.setShortcut("Ctrl+Shift+S")
+        screenshot_action.setStatusTip("Take a screenshot of the current page")
+        screenshot_action.triggered.connect(self.take_screenshot)
+        tools_menu.addAction(screenshot_action)
+        
         tools_menu.addSeparator()
         
         # Mode switching actions
@@ -859,6 +866,22 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.curl_dialog.raise_()
             self.curl_dialog.activateWindow()
+    
+    def take_screenshot(self):
+        """Take a screenshot of the current page (only works in web mode)"""
+        # Only allow screenshot in web mode
+        if self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled:
+            self.status_info.setText("Screenshot only available in Web Browser mode")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+            return
+        
+        # Get current browser
+        current_browser = self.get_current_browser()
+        if current_browser and self.tab_manager:
+            self.tab_manager.take_screenshot(current_browser)
+        else:
+            self.status_info.setText("❌ No active web page for screenshot")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
     
     def show_urlbar_context_menu(self, position):
         """Show context menu for URL bar"""
