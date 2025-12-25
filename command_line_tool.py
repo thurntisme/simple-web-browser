@@ -596,4 +596,7 @@ System Commands:
         """Handle widget close"""
         if self.command_worker:
             self.command_worker.stop_command()
-        event.accept()
+        
+        # Handle case where event might be None (called programmatically)
+        if event is not None:
+            event.accept()

@@ -805,7 +805,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'cmd_tab_index') and self.cmd_tab_index is not None:
             self.tabs.removeTab(self.cmd_tab_index)
             if self.cmd_tab_widget:
-                self.cmd_tab_widget.closeEvent(None)  # Clean up any running processes
+                # Properly clean up any running processes
+                self.cmd_tab_widget.stop_command()
             self.cmd_tab_widget = None
             self.cmd_tab_index = None
     
