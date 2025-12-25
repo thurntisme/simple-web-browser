@@ -203,6 +203,11 @@ class TabManager:
                 privacy_score_action = QAction("🔒 Privacy Score", self.main_window)
                 privacy_score_action.triggered.connect(lambda: self.analyze_privacy_score(browser))
                 menu.addAction(privacy_score_action)
+                
+                # Add Security Score feature
+                security_score_action = QAction("🛡️ Security Score", self.main_window)
+                security_score_action.triggered.connect(lambda: self.analyze_security_score(browser))
+                menu.addAction(security_score_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -3577,6 +3582,752 @@ class TabManager:
                         json.dump(report, f, indent=2, ensure_ascii=False)
                 
                 self.main_window.status_info.setText(f"📄 Privacy report exported: {file_path}")
+                QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Export error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def analyze_security_score(self, browser):
+        """Analyze security score of the current website"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🛡️ Analyzing security score...")
+            
+            # JavaScript to collect security-related information
+            js_code = """
+            (function() {
+                var security = {
+                    connection: {},
+                    headers: {},
+                    certificates: {},
+                    vulnerabilities: [],
+                    forms: [],
+                    scripts: [],
+                    resources: [],
+                    csp: {},
+                    mixedContent: [],
+                    permissions: {}
+                };
+                
+                // Connection security
+                security.connection = {
+                    protocol: window.location.protocol,
+                    isHttps: window.location.protocol === 'https:',
+                    port: window.location.port || (window.location.protocol === 'https:' ? '443' : '80'),
+                    hostname: window.location.hostname
+                };
+                
+                // Check for mixed content
+                var allResources = [];
+                
+                // Check images
+                var images = document.images;
+                for (var i = 0; i < images.length; i++) {
+                    var src = images[i].src;
+                    if (src && src.startsWith('http://') && window.location.protocol === 'https:') {
+                        security.mixedContent.push({
+                            type: 'image',
+                            url: src,
+                            element: 'img'
+                        });
+                    }
+                    if (src) allResources.push({ type: 'image', url: src });
+                }
+                
+                // Check scripts
+                var scripts = document.scripts;
+                for (var i = 0; i < scripts.length; i++) {
+                    var src = scripts[i].src;
+                    if (src) {
+                        if (src.startsWith('http://') && window.location.protocol === 'https:') {
+                            security.mixedContent.push({
+                                type: 'script',
+                                url: src,
+                                element: 'script',
+                                severity: 'high'
+                            });
+                        }
+                        allResources.push({ type: 'script', url: src });
+                        
+                        // Check for potentially dangerous script patterns
+                        if (src.includes('eval') || src.includes('innerHTML') || src.includes('document.write')) {
+                            security.vulnerabilities.push({
+                                type: 'dangerous_script_pattern',
+                                description: 'Script URL contains potentially dangerous patterns',
+                                url: src,
+                                severity: 'medium'
+                            });
+                        }
+                    } else {
+                        // Inline script - check content
+                        var content = scripts[i].textContent || scripts[i].innerHTML;
+                        if (content) {
+                            // Check for dangerous patterns in inline scripts
+                            if (content.includes('eval(') || content.includes('innerHTML') || 
+                                content.includes('document.write') || content.includes('setTimeout(') ||
+                                content.includes('setInterval(')) {
+                                security.vulnerabilities.push({
+                                    type: 'dangerous_inline_script',
+                                    description: 'Inline script contains potentially dangerous functions',
+                                    severity: 'medium',
+                                    patterns: []
+                                });
+                            }
+                            
+                            // Check for hardcoded credentials or API keys
+                            var credentialPatterns = [
+                                /password\\s*[:=]\\s*['""][^'""]+['""]|/gi,
+                                /api[_-]?key\\s*[:=]\\s*['""][^'""]+['""]|/gi,
+                                /secret\\s*[:=]\\s*['""][^'""]+['""]|/gi,
+                                /token\\s*[:=]\\s*['""][^'""]+['""]|/gi
+                            ];
+                            
+                            for (var p = 0; p < credentialPatterns.length; p++) {
+                                if (credentialPatterns[p].test(content)) {
+                                    security.vulnerabilities.push({
+                                        type: 'hardcoded_credentials',
+                                        description: 'Potential hardcoded credentials found in script',
+                                        severity: 'high'
+                                    });
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Check stylesheets for mixed content
+                var stylesheets = document.styleSheets;
+                for (var i = 0; i < stylesheets.length; i++) {
+                    try {
+                        var href = stylesheets[i].href;
+                        if (href && href.startsWith('http://') && window.location.protocol === 'https:') {
+                            security.mixedContent.push({
+                                type: 'stylesheet',
+                                url: href,
+                                element: 'link'
+                            });
+                        }
+                        if (href) allResources.push({ type: 'stylesheet', url: href });
+                    } catch(e) {
+                        // Cross-origin stylesheet, skip
+                    }
+                }
+                
+                // Check iframes
+                var iframes = document.querySelectorAll('iframe');
+                for (var i = 0; i < iframes.length; i++) {
+                    var src = iframes[i].src;
+                    if (src) {
+                        if (src.startsWith('http://') && window.location.protocol === 'https:') {
+                            security.mixedContent.push({
+                                type: 'iframe',
+                                url: src,
+                                element: 'iframe',
+                                severity: 'high'
+                            });
+                        }
+                        allResources.push({ type: 'iframe', url: src });
+                        
+                        // Check for potentially unsafe iframe sources
+                        if (src.includes('javascript:') || src.includes('data:')) {
+                            security.vulnerabilities.push({
+                                type: 'unsafe_iframe',
+                                description: 'Iframe with potentially unsafe source',
+                                url: src,
+                                severity: 'medium'
+                            });
+                        }
+                    }
+                }
+                
+                security.resources = allResources;
+                
+                // Analyze forms for security issues
+                var forms = document.forms;
+                for (var i = 0; i < forms.length; i++) {
+                    var form = forms[i];
+                    var formData = {
+                        action: form.action || window.location.href,
+                        method: form.method || 'GET',
+                        isHttps: (form.action || window.location.href).startsWith('https://'),
+                        hasAutoComplete: form.autocomplete !== 'off',
+                        inputs: [],
+                        vulnerabilities: []
+                    };
+                    
+                    // Check form action security
+                    if (!formData.isHttps && window.location.protocol === 'https:') {
+                        formData.vulnerabilities.push({
+                            type: 'insecure_form_action',
+                            description: 'Form submits to insecure HTTP endpoint from HTTPS page',
+                            severity: 'high'
+                        });
+                    }
+                    
+                    // Analyze form inputs
+                    var inputs = form.querySelectorAll('input, textarea, select');
+                    for (var j = 0; j < inputs.length; j++) {
+                        var input = inputs[j];
+                        var inputData = {
+                            type: input.type || 'text',
+                            name: input.name || '',
+                            id: input.id || '',
+                            hasAutoComplete: input.autocomplete !== 'off',
+                            isSensitive: false
+                        };
+                        
+                        // Check for sensitive input types
+                        var sensitiveTypes = ['password', 'email', 'tel', 'credit-card', 'cc-number'];
+                        var sensitiveName = input.name && (
+                            input.name.toLowerCase().includes('password') ||
+                            input.name.toLowerCase().includes('email') ||
+                            input.name.toLowerCase().includes('phone') ||
+                            input.name.toLowerCase().includes('credit') ||
+                            input.name.toLowerCase().includes('card') ||
+                            input.name.toLowerCase().includes('ssn')
+                        );
+                        
+                        if (sensitiveTypes.includes(input.type) || sensitiveName) {
+                            inputData.isSensitive = true;
+                            
+                            // Check if sensitive input lacks proper security
+                            if (input.autocomplete !== 'off' && input.type === 'password') {
+                                formData.vulnerabilities.push({
+                                    type: 'password_autocomplete',
+                                    description: 'Password field allows autocomplete',
+                                    severity: 'low'
+                                });
+                            }
+                        }
+                        
+                        formData.inputs.push(inputData);
+                    }
+                    
+                    security.forms.push(formData);
+                }
+                
+                // Check for Content Security Policy
+                var cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+                if (cspMeta) {
+                    security.csp = {
+                        present: true,
+                        content: cspMeta.content,
+                        directives: cspMeta.content.split(';').map(function(d) { return d.trim(); })
+                    };
+                } else {
+                    security.csp = { present: false };
+                }
+                
+                // Check for X-Frame-Options equivalent
+                var frameOptions = document.querySelector('meta[http-equiv="X-Frame-Options"]');
+                security.frameOptions = frameOptions ? frameOptions.content : null;
+                
+                // Check for dangerous global variables or functions
+                var dangerousFunctions = ['eval', 'setTimeout', 'setInterval', 'Function'];
+                var exposedDangerous = [];
+                for (var i = 0; i < dangerousFunctions.length; i++) {
+                    if (typeof window[dangerousFunctions[i]] === 'function') {
+                        exposedDangerous.push(dangerousFunctions[i]);
+                    }
+                }
+                
+                if (exposedDangerous.length > 0) {
+                    security.vulnerabilities.push({
+                        type: 'exposed_dangerous_functions',
+                        description: 'Potentially dangerous functions are accessible: ' + exposedDangerous.join(', '),
+                        severity: 'low',
+                        functions: exposedDangerous
+                    });
+                }
+                
+                // Check for console errors (security-related)
+                security.consoleErrors = [];
+                
+                // Check for outdated libraries (basic detection)
+                var libraryChecks = [
+                    { name: 'jQuery', check: function() { return typeof window.jQuery !== 'undefined' ? window.jQuery.fn.jquery : null; }},
+                    { name: 'Bootstrap', check: function() { return typeof window.bootstrap !== 'undefined' ? 'detected' : null; }},
+                    { name: 'Angular', check: function() { return typeof window.angular !== 'undefined' ? window.angular.version.full : null; }}
+                ];
+                
+                security.libraries = [];
+                for (var i = 0; i < libraryChecks.length; i++) {
+                    var version = libraryChecks[i].check();
+                    if (version) {
+                        security.libraries.push({
+                            name: libraryChecks[i].name,
+                            version: version
+                        });
+                    }
+                }
+                
+                // Check for clickjacking protection
+                security.clickjackingProtection = {
+                    frameOptions: !!frameOptions,
+                    cspFrameAncestors: security.csp.present && security.csp.content.includes('frame-ancestors')
+                };
+                
+                return security;
+            })();
+            """
+            
+            def process_security_data(security_data):
+                if not security_data:
+                    self.main_window.status_info.setText("❌ Could not collect security data")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the security score dialog
+                self.show_security_score_dialog(security_data, current_url)
+            
+            # Execute JavaScript to get security data
+            page.runJavaScript(js_code, process_security_data)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Security analysis error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_security_score_dialog(self, security_data, page_url):
+        """Show dialog with security score analysis results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView, 
+                                   QProgressBar, QFileDialog, QSplitter, QFrame)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        from datetime import datetime
+        import json
+        
+        # Calculate security score
+        score, vulnerabilities, recommendations = self.calculate_security_score(security_data)
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"🛡️ Security Score: {score}/100 - {page_url}")
+        dialog.setMinimumSize(800, 600)
+        dialog.resize(1000, 700)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header with score
+        header_frame = QFrame()
+        header_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #d0d0d0; border-radius: 8px; padding: 15px;")
+        header_layout = QVBoxLayout(header_frame)
+        
+        # Score display
+        score_label = QLabel(f"🛡️ Security Score: {score}/100")
+        score_font = QFont()
+        score_font.setPointSize(18)
+        score_font.setBold(True)
+        score_label.setFont(score_font)
+        
+        # Color code the score
+        if score >= 80:
+            score_label.setStyleSheet("color: #28a745;")  # Green
+            score_text = "Excellent Security"
+        elif score >= 60:
+            score_label.setStyleSheet("color: #ffc107;")  # Yellow
+            score_text = "Good Security"
+        elif score >= 40:
+            score_label.setStyleSheet("color: #fd7e14;")  # Orange
+            score_text = "Fair Security"
+        else:
+            score_label.setStyleSheet("color: #dc3545;")  # Red
+            score_text = "Poor Security"
+        
+        header_layout.addWidget(score_label)
+        
+        score_desc = QLabel(f"🔍 {score_text} - {len(vulnerabilities)} security issues found")
+        score_desc.setStyleSheet("font-size: 14px; color: #666;")
+        header_layout.addWidget(score_desc)
+        
+        layout.addWidget(header_frame)
+        
+        # Tab widget for different categories
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Vulnerabilities Tab
+        vuln_widget = QWidget()
+        vuln_layout = QVBoxLayout(vuln_widget)
+        
+        vuln_label = QLabel(f"⚠️ Security Vulnerabilities ({len(vulnerabilities)})")
+        vuln_label.setStyleSheet("font-weight: bold; color: #dc3545; font-size: 14px;")
+        vuln_layout.addWidget(vuln_label)
+        
+        vuln_text = QTextEdit()
+        vuln_text.setReadOnly(True)
+        if vulnerabilities:
+            vuln_content = "\n".join([f"• {vuln}" for vuln in vulnerabilities])
+        else:
+            vuln_content = "✅ No significant security vulnerabilities detected!"
+        vuln_text.setPlainText(vuln_content)
+        vuln_layout.addWidget(vuln_text)
+        
+        tab_widget.addTab(vuln_widget, f"Vulnerabilities ({len(vulnerabilities)})")
+        
+        # Recommendations Tab
+        recommendations_widget = QWidget()
+        recommendations_layout = QVBoxLayout(recommendations_widget)
+        
+        rec_label = QLabel(f"💡 Security Recommendations ({len(recommendations)})")
+        rec_label.setStyleSheet("font-weight: bold; color: #0066cc; font-size: 14px;")
+        recommendations_layout.addWidget(rec_label)
+        
+        rec_text = QTextEdit()
+        rec_text.setReadOnly(True)
+        if recommendations:
+            rec_content = "\n".join([f"• {rec}" for rec in recommendations])
+        else:
+            rec_content = "✅ No additional security recommendations - your security looks good!"
+        rec_text.setPlainText(rec_content)
+        recommendations_layout.addWidget(rec_text)
+        
+        tab_widget.addTab(recommendations_widget, f"Recommendations ({len(recommendations)})")
+        
+        # Details Tab
+        details_widget = QWidget()
+        details_layout = QVBoxLayout(details_widget)
+        
+        details_label = QLabel("📋 Detailed Security Analysis")
+        details_label.setStyleSheet("font-weight: bold; color: #333; font-size: 14px;")
+        details_layout.addWidget(details_label)
+        
+        details_text = QTextEdit()
+        details_text.setReadOnly(True)
+        details_content = self.format_security_details(security_data)
+        details_text.setPlainText(details_content)
+        details_layout.addWidget(details_text)
+        
+        tab_widget.addTab(details_widget, "Details")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        # Export button
+        export_btn = QPushButton("💾 Export Report")
+        export_btn.clicked.connect(lambda: self.export_security_report(security_data, score, vulnerabilities, recommendations, page_url))
+        button_layout.addWidget(export_btn)
+        
+        button_layout.addStretch()
+        
+        # Close button
+        close_btn = QPushButton("❌ Close")
+        close_btn.clicked.connect(dialog.close)
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # Update status
+        self.main_window.status_info.setText(f"🛡️ Security Score: {score}/100 ({score_text})")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+        
+        # Show dialog
+        dialog.exec_()
+    
+    def calculate_security_score(self, security_data):
+        """Calculate security score based on various factors"""
+        score = 100
+        vulnerabilities = []
+        recommendations = []
+        
+        # Check HTTPS
+        connection = security_data.get('connection', {})
+        if not connection.get('isHttps', False):
+            score -= 25
+            vulnerabilities.append("Website is not using HTTPS encryption")
+            recommendations.append("Implement HTTPS to encrypt all data transmission")
+        
+        # Check for mixed content
+        mixed_content = security_data.get('mixedContent', [])
+        if mixed_content:
+            high_severity = [mc for mc in mixed_content if mc.get('severity') == 'high']
+            if high_severity:
+                score -= 20
+                vulnerabilities.append(f"High-risk mixed content detected ({len(high_severity)} items)")
+                recommendations.append("Fix all mixed content by using HTTPS for all resources")
+            else:
+                score -= 10
+                vulnerabilities.append(f"Mixed content detected ({len(mixed_content)} items)")
+                recommendations.append("Update all HTTP resources to use HTTPS")
+        
+        # Check Content Security Policy
+        csp = security_data.get('csp', {})
+        if not csp.get('present', False):
+            score -= 15
+            vulnerabilities.append("No Content Security Policy (CSP) implemented")
+            recommendations.append("Implement Content Security Policy to prevent XSS attacks")
+        else:
+            # Check CSP quality
+            csp_content = csp.get('content', '').lower()
+            if 'unsafe-inline' in csp_content:
+                score -= 5
+                vulnerabilities.append("CSP allows unsafe-inline scripts/styles")
+                recommendations.append("Remove 'unsafe-inline' from CSP and use nonces or hashes")
+            if 'unsafe-eval' in csp_content:
+                score -= 5
+                vulnerabilities.append("CSP allows unsafe-eval")
+                recommendations.append("Remove 'unsafe-eval' from CSP to prevent code injection")
+        
+        # Check clickjacking protection
+        clickjacking = security_data.get('clickjackingProtection', {})
+        if not clickjacking.get('frameOptions', False) and not clickjacking.get('cspFrameAncestors', False):
+            score -= 10
+            vulnerabilities.append("No clickjacking protection detected")
+            recommendations.append("Add X-Frame-Options header or CSP frame-ancestors directive")
+        
+        # Check form security
+        forms = security_data.get('forms', [])
+        insecure_forms = []
+        for form in forms:
+            form_vulns = form.get('vulnerabilities', [])
+            for vuln in form_vulns:
+                if vuln.get('severity') == 'high':
+                    insecure_forms.append(vuln)
+        
+        if insecure_forms:
+            score -= 15
+            vulnerabilities.append(f"Insecure form submissions detected ({len(insecure_forms)} forms)")
+            recommendations.append("Ensure all forms with sensitive data submit to HTTPS endpoints")
+        
+        # Check for script vulnerabilities
+        script_vulns = [v for v in security_data.get('vulnerabilities', []) if 'script' in v.get('type', '')]
+        if script_vulns:
+            high_script_vulns = [v for v in script_vulns if v.get('severity') == 'high']
+            if high_script_vulns:
+                score -= 15
+                vulnerabilities.append(f"High-risk script vulnerabilities detected ({len(high_script_vulns)} issues)")
+                recommendations.append("Review and secure all script code, remove dangerous patterns")
+            else:
+                score -= 8
+                vulnerabilities.append(f"Script security issues detected ({len(script_vulns)} issues)")
+                recommendations.append("Review script code for potential security improvements")
+        
+        # Check for hardcoded credentials
+        cred_vulns = [v for v in security_data.get('vulnerabilities', []) if v.get('type') == 'hardcoded_credentials']
+        if cred_vulns:
+            score -= 20
+            vulnerabilities.append("Hardcoded credentials or API keys detected in scripts")
+            recommendations.append("Remove all hardcoded credentials and use secure configuration")
+        
+        # Check for unsafe iframes
+        iframe_vulns = [v for v in security_data.get('vulnerabilities', []) if v.get('type') == 'unsafe_iframe']
+        if iframe_vulns:
+            score -= 10
+            vulnerabilities.append(f"Unsafe iframe sources detected ({len(iframe_vulns)} iframes)")
+            recommendations.append("Review iframe sources and avoid javascript: or data: URLs")
+        
+        # Check for exposed dangerous functions
+        dangerous_funcs = [v for v in security_data.get('vulnerabilities', []) if v.get('type') == 'exposed_dangerous_functions']
+        if dangerous_funcs:
+            score -= 5
+            vulnerabilities.append("Potentially dangerous JavaScript functions are accessible")
+            recommendations.append("Consider restricting access to eval() and similar functions")
+        
+        # Check for outdated libraries
+        libraries = security_data.get('libraries', [])
+        if libraries:
+            # This is a basic check - in a real implementation, you'd check against known vulnerable versions
+            for lib in libraries:
+                if lib.get('name') == 'jQuery' and lib.get('version'):
+                    version = lib.get('version')
+                    # Basic version check for demonstration
+                    if version.startswith('1.') or version.startswith('2.'):
+                        score -= 8
+                        vulnerabilities.append(f"Outdated {lib.get('name')} version ({version}) may have security vulnerabilities")
+                        recommendations.append(f"Update {lib.get('name')} to the latest secure version")
+        
+        # Check resource security
+        resources = security_data.get('resources', [])
+        external_resources = [r for r in resources if not self.is_same_origin(r.get('url', ''), security_data.get('connection', {}).get('hostname', ''))]
+        if len(external_resources) > 10:
+            score -= 5
+            vulnerabilities.append(f"High number of external resources ({len(external_resources)}) increases attack surface")
+            recommendations.append("Minimize external dependencies and use Subresource Integrity (SRI)")
+        
+        # Ensure score doesn't go below 0
+        score = max(score, 0)
+        
+        return score, vulnerabilities, recommendations
+    
+    def is_same_origin(self, url, hostname):
+        """Check if URL is from the same origin"""
+        try:
+            if not url or not hostname:
+                return False
+            if url.startswith('//'):
+                return hostname in url
+            if url.startswith('/'):
+                return True
+            if url.startswith('http'):
+                return hostname in url
+            return True  # Relative URLs are same origin
+        except:
+            return False
+    
+    def format_security_details(self, security_data):
+        """Format security data for detailed view"""
+        details = []
+        
+        # Connection details
+        connection = security_data.get('connection', {})
+        details.append("🔐 CONNECTION SECURITY:")
+        details.append(f"  • Protocol: {connection.get('protocol', 'unknown')}")
+        details.append(f"  • HTTPS: {'✅ Yes' if connection.get('isHttps') else '❌ No'}")
+        details.append(f"  • Port: {connection.get('port', 'unknown')}")
+        details.append(f"  • Hostname: {connection.get('hostname', 'unknown')}")
+        details.append("")
+        
+        # Mixed content details
+        mixed_content = security_data.get('mixedContent', [])
+        details.append(f"⚠️ MIXED CONTENT ({len(mixed_content)}):")
+        if mixed_content:
+            for mc in mixed_content[:5]:  # Show first 5
+                severity = f" ({mc.get('severity', 'medium')} risk)" if mc.get('severity') else ""
+                details.append(f"  • {mc.get('type', 'unknown')}: {mc.get('url', 'unknown')}{severity}")
+            if len(mixed_content) > 5:
+                details.append(f"  • ... and {len(mixed_content) - 5} more mixed content items")
+        else:
+            details.append("  • No mixed content detected")
+        details.append("")
+        
+        # CSP details
+        csp = security_data.get('csp', {})
+        details.append("🛡️ CONTENT SECURITY POLICY:")
+        if csp.get('present'):
+            details.append("  • Status: ✅ Present")
+            directives = csp.get('directives', [])
+            details.append(f"  • Directives: {len(directives)}")
+            for directive in directives[:3]:  # Show first 3 directives
+                details.append(f"    - {directive}")
+            if len(directives) > 3:
+                details.append(f"    - ... and {len(directives) - 3} more directives")
+        else:
+            details.append("  • Status: ❌ Not implemented")
+        details.append("")
+        
+        # Form security details
+        forms = security_data.get('forms', [])
+        details.append(f"📝 FORM SECURITY ({len(forms)}):")
+        if forms:
+            for i, form in enumerate(forms):
+                secure = "🔒" if form.get('isHttps') else "🔓"
+                method = form.get('method', 'GET').upper()
+                vuln_count = len(form.get('vulnerabilities', []))
+                sensitive_count = sum(1 for inp in form.get('inputs', []) if inp.get('isSensitive'))
+                details.append(f"  • Form {i+1}: {method} {secure} ({sensitive_count} sensitive fields, {vuln_count} issues)")
+        else:
+            details.append("  • No forms found")
+        details.append("")
+        
+        # Vulnerabilities details
+        vulnerabilities = security_data.get('vulnerabilities', [])
+        details.append(f"🚨 DETECTED VULNERABILITIES ({len(vulnerabilities)}):")
+        if vulnerabilities:
+            vuln_types = {}
+            for vuln in vulnerabilities:
+                vuln_type = vuln.get('type', 'unknown')
+                severity = vuln.get('severity', 'unknown')
+                if vuln_type not in vuln_types:
+                    vuln_types[vuln_type] = []
+                vuln_types[vuln_type].append(severity)
+            
+            for vuln_type, severities in vuln_types.items():
+                severity_counts = {}
+                for s in severities:
+                    severity_counts[s] = severity_counts.get(s, 0) + 1
+                severity_str = ", ".join([f"{count} {sev}" for sev, count in severity_counts.items()])
+                details.append(f"  • {vuln_type.replace('_', ' ').title()}: {severity_str}")
+        else:
+            details.append("  • No vulnerabilities detected")
+        details.append("")
+        
+        # Libraries details
+        libraries = security_data.get('libraries', [])
+        details.append(f"📚 DETECTED LIBRARIES ({len(libraries)}):")
+        if libraries:
+            for lib in libraries:
+                details.append(f"  • {lib.get('name', 'unknown')}: {lib.get('version', 'unknown version')}")
+        else:
+            details.append("  • No JavaScript libraries detected")
+        details.append("")
+        
+        # Resources summary
+        resources = security_data.get('resources', [])
+        if resources:
+            resource_types = {}
+            for resource in resources:
+                res_type = resource.get('type', 'unknown')
+                resource_types[res_type] = resource_types.get(res_type, 0) + 1
+            
+            details.append(f"🌐 RESOURCES SUMMARY ({len(resources)} total):")
+            for res_type, count in resource_types.items():
+                details.append(f"  • {res_type.title()}: {count}")
+        
+        return "\n".join(details)
+    
+    def export_security_report(self, security_data, score, vulnerabilities, recommendations, page_url):
+        """Export security analysis report to file"""
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            from datetime import datetime
+            import json
+            
+            # Generate filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            domain = page_url.split('/')[2] if '://' in page_url else 'unknown'
+            filename = f"security_report_{domain}_{timestamp}.json"
+            
+            # Show save dialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self.main_window,
+                "Export Security Report",
+                filename,
+                "JSON Files (*.json);;Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                report = {
+                    'url': page_url,
+                    'timestamp': datetime.now().isoformat(),
+                    'security_score': score,
+                    'vulnerabilities': vulnerabilities,
+                    'recommendations': recommendations,
+                    'raw_data': security_data
+                }
+                
+                if file_path.endswith('.txt'):
+                    # Export as readable text
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(f"Security Analysis Report\n")
+                        f.write(f"{'=' * 50}\n\n")
+                        f.write(f"URL: {page_url}\n")
+                        f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write(f"Security Score: {score}/100\n\n")
+                        
+                        f.write(f"Vulnerabilities ({len(vulnerabilities)}):\n")
+                        for vuln in vulnerabilities:
+                            f.write(f"  • {vuln}\n")
+                        f.write("\n")
+                        
+                        f.write(f"Recommendations ({len(recommendations)}):\n")
+                        for rec in recommendations:
+                            f.write(f"  • {rec}\n")
+                        f.write("\n")
+                        
+                        f.write("Detailed Analysis:\n")
+                        f.write(self.format_security_details(security_data))
+                else:
+                    # Export as JSON
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(report, f, indent=2, ensure_ascii=False)
+                
+                self.main_window.status_info.setText(f"📄 Security report exported: {file_path}")
                 QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
                 
         except Exception as e:
