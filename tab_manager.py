@@ -198,6 +198,11 @@ class TabManager:
                 speed_analyzer_action = QAction("⚡ Page Speed Analyzer", self.main_window)
                 speed_analyzer_action.triggered.connect(lambda: self.analyze_page_speed(browser))
                 menu.addAction(speed_analyzer_action)
+                
+                # Add Privacy Score feature
+                privacy_score_action = QAction("🔒 Privacy Score", self.main_window)
+                privacy_score_action.triggered.connect(lambda: self.analyze_privacy_score(browser))
+                menu.addAction(privacy_score_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -3007,6 +3012,576 @@ class TabManager:
                 browser = widget.browser
                 settings = browser.settings()
                 settings.setFontSize(settings.DefaultFontSize, font_size)
+    
+    def analyze_privacy_score(self, browser):
+        """Analyze privacy score of the current website"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🔒 Analyzing privacy score...")
+            
+            # JavaScript to collect privacy-related information
+            js_code = """
+            (function() {
+                var privacy = {
+                    cookies: [],
+                    localStorage: {},
+                    sessionStorage: {},
+                    trackers: [],
+                    thirdPartyRequests: [],
+                    forms: [],
+                    security: {},
+                    permissions: {},
+                    fingerprinting: {}
+                };
+                
+                // Analyze cookies
+                try {
+                    var cookies = document.cookie.split(';');
+                    privacy.cookies = cookies.map(function(cookie) {
+                        var parts = cookie.trim().split('=');
+                        return {
+                            name: parts[0] || '',
+                            value: parts[1] || '',
+                            length: cookie.length,
+                            hasSecure: cookie.toLowerCase().includes('secure'),
+                            hasHttpOnly: cookie.toLowerCase().includes('httponly'),
+                            hasSameSite: cookie.toLowerCase().includes('samesite')
+                        };
+                    }).filter(function(c) { return c.name; });
+                } catch(e) {
+                    privacy.cookies = [];
+                }
+                
+                // Analyze local storage
+                try {
+                    privacy.localStorage = {
+                        itemCount: localStorage.length,
+                        totalSize: JSON.stringify(localStorage).length,
+                        keys: Object.keys(localStorage)
+                    };
+                } catch(e) {
+                    privacy.localStorage = { itemCount: 0, totalSize: 0, keys: [] };
+                }
+                
+                // Analyze session storage
+                try {
+                    privacy.sessionStorage = {
+                        itemCount: sessionStorage.length,
+                        totalSize: JSON.stringify(sessionStorage).length,
+                        keys: Object.keys(sessionStorage)
+                    };
+                } catch(e) {
+                    privacy.sessionStorage = { itemCount: 0, totalSize: 0, keys: [] };
+                }
+                
+                // Analyze forms for sensitive data collection
+                var forms = document.forms;
+                for (var i = 0; i < forms.length; i++) {
+                    var form = forms[i];
+                    var inputs = form.querySelectorAll('input, textarea, select');
+                    var sensitiveFields = [];
+                    
+                    for (var j = 0; j < inputs.length; j++) {
+                        var input = inputs[j];
+                        var type = input.type ? input.type.toLowerCase() : '';
+                        var name = input.name ? input.name.toLowerCase() : '';
+                        var id = input.id ? input.id.toLowerCase() : '';
+                        var placeholder = input.placeholder ? input.placeholder.toLowerCase() : '';
+                        
+                        // Check for sensitive field types
+                        var isSensitive = type === 'password' || type === 'email' || 
+                                        name.includes('password') || name.includes('email') || 
+                                        name.includes('phone') || name.includes('credit') || 
+                                        name.includes('card') || name.includes('ssn') || 
+                                        id.includes('password') || id.includes('email') ||
+                                        placeholder.includes('password') || placeholder.includes('email');
+                        
+                        if (isSensitive) {
+                            sensitiveFields.push({
+                                type: type,
+                                name: name,
+                                id: id,
+                                placeholder: placeholder
+                            });
+                        }
+                    }
+                    
+                    privacy.forms.push({
+                        action: form.action || '',
+                        method: form.method || 'get',
+                        isHttps: (form.action || '').startsWith('https://'),
+                        inputCount: inputs.length,
+                        sensitiveFields: sensitiveFields,
+                        hasAutoComplete: form.autocomplete !== 'off'
+                    });
+                }
+                
+                // Security analysis
+                privacy.security = {
+                    isHttps: window.location.protocol === 'https:',
+                    hasMixedContent: false, // Will be detected by checking resources
+                    hasCSP: !!document.querySelector('meta[http-equiv="Content-Security-Policy"]'),
+                    hasXFrameOptions: false, // Server-side header, can't detect from JS
+                    referrerPolicy: document.querySelector('meta[name="referrer"]') ? 
+                                  document.querySelector('meta[name="referrer"]').content : 'default'
+                };
+                
+                // Fingerprinting detection
+                privacy.fingerprinting = {
+                    canvasFingerprinting: !!document.querySelector('canvas'),
+                    webglFingerprinting: !!(window.WebGLRenderingContext || window.WebGL2RenderingContext),
+                    audioFingerprinting: !!(window.AudioContext || window.webkitAudioContext),
+                    fontFingerprinting: document.fonts ? document.fonts.size > 0 : false,
+                    screenFingerprinting: true, // Screen properties always available
+                    timezoneFingerprinting: true, // Timezone always detectable
+                    languageFingerprinting: navigator.languages ? navigator.languages.length > 1 : false
+                };
+                
+                // Detect potential trackers (common tracking domains and scripts)
+                var scripts = document.scripts;
+                var trackingDomains = [
+                    'google-analytics.com', 'googletagmanager.com', 'doubleclick.net',
+                    'facebook.com', 'facebook.net', 'connect.facebook.net',
+                    'twitter.com', 'ads.twitter.com', 'analytics.twitter.com',
+                    'amazon-adsystem.com', 'googlesyndication.com', 'adsystem.amazon.com',
+                    'scorecardresearch.com', 'quantserve.com', 'outbrain.com',
+                    'taboola.com', 'addthis.com', 'sharethis.com'
+                ];
+                
+                for (var i = 0; i < scripts.length; i++) {
+                    var src = scripts[i].src;
+                    if (src) {
+                        for (var j = 0; j < trackingDomains.length; j++) {
+                            if (src.includes(trackingDomains[j])) {
+                                privacy.trackers.push({
+                                    domain: trackingDomains[j],
+                                    url: src,
+                                    type: 'script'
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Check for third-party requests (images, iframes, etc.)
+                var images = document.images;
+                var currentDomain = window.location.hostname;
+                
+                for (var i = 0; i < images.length; i++) {
+                    var imgSrc = images[i].src;
+                    if (imgSrc && !imgSrc.includes(currentDomain) && imgSrc.startsWith('http')) {
+                        var domain = new URL(imgSrc).hostname;
+                        privacy.thirdPartyRequests.push({
+                            domain: domain,
+                            url: imgSrc,
+                            type: 'image'
+                        });
+                    }
+                }
+                
+                // Check iframes
+                var iframes = document.iframes || document.querySelectorAll('iframe');
+                for (var i = 0; i < iframes.length; i++) {
+                    var iframeSrc = iframes[i].src;
+                    if (iframeSrc && !iframeSrc.includes(currentDomain) && iframeSrc.startsWith('http')) {
+                        var domain = new URL(iframeSrc).hostname;
+                        privacy.thirdPartyRequests.push({
+                            domain: domain,
+                            url: iframeSrc,
+                            type: 'iframe'
+                        });
+                    }
+                }
+                
+                return privacy;
+            })();
+            """
+            
+            def process_privacy_data(privacy_data):
+                if not privacy_data:
+                    self.main_window.status_info.setText("❌ Could not collect privacy data")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the privacy score dialog
+                self.show_privacy_score_dialog(privacy_data, current_url)
+            
+            # Execute JavaScript to get privacy data
+            page.runJavaScript(js_code, process_privacy_data)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Privacy analysis error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_privacy_score_dialog(self, privacy_data, page_url):
+        """Show dialog with privacy score analysis results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView, 
+                                   QProgressBar, QFileDialog, QSplitter, QFrame)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        from datetime import datetime
+        import json
+        
+        # Calculate privacy score
+        score, issues, recommendations = self.calculate_privacy_score(privacy_data)
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"🔒 Privacy Score: {score}/100 - {page_url}")
+        dialog.setMinimumSize(800, 600)
+        dialog.resize(1000, 700)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header with score
+        header_frame = QFrame()
+        header_frame.setStyleSheet("background-color: #f0f8ff; border: 1px solid #d0d0d0; border-radius: 8px; padding: 15px;")
+        header_layout = QVBoxLayout(header_frame)
+        
+        # Score display
+        score_label = QLabel(f"🔒 Privacy Score: {score}/100")
+        score_font = QFont()
+        score_font.setPointSize(18)
+        score_font.setBold(True)
+        score_label.setFont(score_font)
+        
+        # Color code the score
+        if score >= 80:
+            score_label.setStyleSheet("color: #28a745;")  # Green
+            score_text = "Excellent Privacy"
+        elif score >= 60:
+            score_label.setStyleSheet("color: #ffc107;")  # Yellow
+            score_text = "Good Privacy"
+        elif score >= 40:
+            score_label.setStyleSheet("color: #fd7e14;")  # Orange
+            score_text = "Fair Privacy"
+        else:
+            score_label.setStyleSheet("color: #dc3545;")  # Red
+            score_text = "Poor Privacy"
+        
+        header_layout.addWidget(score_label)
+        
+        score_desc = QLabel(f"📊 {score_text} - {len(issues)} privacy issues found")
+        score_desc.setStyleSheet("font-size: 14px; color: #666;")
+        header_layout.addWidget(score_desc)
+        
+        layout.addWidget(header_frame)
+        
+        # Tab widget for different categories
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Issues Tab
+        issues_widget = QWidget()
+        issues_layout = QVBoxLayout(issues_widget)
+        
+        issues_label = QLabel(f"⚠️ Privacy Issues ({len(issues)})")
+        issues_label.setStyleSheet("font-weight: bold; color: #dc3545; font-size: 14px;")
+        issues_layout.addWidget(issues_label)
+        
+        issues_text = QTextEdit()
+        issues_text.setReadOnly(True)
+        if issues:
+            issues_content = "\n".join([f"• {issue}" for issue in issues])
+        else:
+            issues_content = "✅ No significant privacy issues detected!"
+        issues_text.setPlainText(issues_content)
+        issues_layout.addWidget(issues_text)
+        
+        tab_widget.addTab(issues_widget, f"Issues ({len(issues)})")
+        
+        # Recommendations Tab
+        recommendations_widget = QWidget()
+        recommendations_layout = QVBoxLayout(recommendations_widget)
+        
+        rec_label = QLabel(f"💡 Recommendations ({len(recommendations)})")
+        rec_label.setStyleSheet("font-weight: bold; color: #0066cc; font-size: 14px;")
+        recommendations_layout.addWidget(rec_label)
+        
+        rec_text = QTextEdit()
+        rec_text.setReadOnly(True)
+        if recommendations:
+            rec_content = "\n".join([f"• {rec}" for rec in recommendations])
+        else:
+            rec_content = "✅ No additional recommendations - your privacy looks good!"
+        rec_text.setPlainText(rec_content)
+        recommendations_layout.addWidget(rec_text)
+        
+        tab_widget.addTab(recommendations_widget, f"Recommendations ({len(recommendations)})")
+        
+        # Details Tab
+        details_widget = QWidget()
+        details_layout = QVBoxLayout(details_widget)
+        
+        details_label = QLabel("📋 Detailed Analysis")
+        details_label.setStyleSheet("font-weight: bold; color: #333; font-size: 14px;")
+        details_layout.addWidget(details_label)
+        
+        details_text = QTextEdit()
+        details_text.setReadOnly(True)
+        details_content = self.format_privacy_details(privacy_data)
+        details_text.setPlainText(details_content)
+        details_layout.addWidget(details_text)
+        
+        tab_widget.addTab(details_widget, "Details")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        # Export button
+        export_btn = QPushButton("💾 Export Report")
+        export_btn.clicked.connect(lambda: self.export_privacy_report(privacy_data, score, issues, recommendations, page_url))
+        button_layout.addWidget(export_btn)
+        
+        button_layout.addStretch()
+        
+        # Close button
+        close_btn = QPushButton("❌ Close")
+        close_btn.clicked.connect(dialog.close)
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # Update status
+        self.main_window.status_info.setText(f"🔒 Privacy Score: {score}/100 ({score_text})")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+        
+        # Show dialog
+        dialog.exec_()
+    
+    def calculate_privacy_score(self, privacy_data):
+        """Calculate privacy score based on various factors"""
+        score = 100
+        issues = []
+        recommendations = []
+        
+        # Check HTTPS
+        security = privacy_data.get('security', {})
+        if not security.get('isHttps', False):
+            score -= 20
+            issues.append("Website is not using HTTPS encryption")
+            recommendations.append("Use HTTPS to encrypt data transmission")
+        
+        # Check cookies
+        cookies = privacy_data.get('cookies', [])
+        if len(cookies) > 10:
+            score -= 10
+            issues.append(f"High number of cookies ({len(cookies)}) may indicate excessive tracking")
+            recommendations.append("Review and limit cookie usage")
+        
+        # Check for insecure cookies
+        insecure_cookies = [c for c in cookies if not c.get('hasSecure', False)]
+        if insecure_cookies and security.get('isHttps', False):
+            score -= 5
+            issues.append(f"{len(insecure_cookies)} cookies lack Secure flag on HTTPS site")
+            recommendations.append("Set Secure flag on all cookies for HTTPS sites")
+        
+        # Check local storage usage
+        localStorage = privacy_data.get('localStorage', {})
+        if localStorage.get('totalSize', 0) > 50000:  # 50KB
+            score -= 5
+            issues.append("Large amount of data stored in browser local storage")
+            recommendations.append("Minimize local storage usage and clear unnecessary data")
+        
+        # Check for trackers
+        trackers = privacy_data.get('trackers', [])
+        if len(trackers) > 0:
+            score -= min(len(trackers) * 5, 25)  # Max 25 points deduction
+            issues.append(f"Detected {len(trackers)} tracking scripts")
+            recommendations.append("Consider blocking tracking scripts or using privacy-focused alternatives")
+        
+        # Check third-party requests
+        third_party = privacy_data.get('thirdPartyRequests', [])
+        if len(third_party) > 5:
+            score -= min(len(third_party) * 2, 15)  # Max 15 points deduction
+            issues.append(f"High number of third-party requests ({len(third_party)})")
+            recommendations.append("Minimize third-party content to reduce data sharing")
+        
+        # Check forms for sensitive data
+        forms = privacy_data.get('forms', [])
+        insecure_forms = [f for f in forms if f.get('sensitiveFields') and not f.get('isHttps', True)]
+        if insecure_forms:
+            score -= 15
+            issues.append("Sensitive form data transmitted over insecure connection")
+            recommendations.append("Ensure all forms with sensitive data use HTTPS")
+        
+        # Check fingerprinting potential
+        fingerprinting = privacy_data.get('fingerprinting', {})
+        fingerprint_methods = sum([1 for method, detected in fingerprinting.items() if detected])
+        if fingerprint_methods > 4:
+            score -= 10
+            issues.append(f"High fingerprinting potential ({fingerprint_methods} methods available)")
+            recommendations.append("Consider using browser extensions to limit fingerprinting")
+        
+        # Check Content Security Policy
+        if not security.get('hasCSP', False):
+            score -= 5
+            issues.append("No Content Security Policy detected")
+            recommendations.append("Implement Content Security Policy to prevent XSS attacks")
+        
+        # Ensure score doesn't go below 0
+        score = max(score, 0)
+        
+        return score, issues, recommendations
+    
+    def format_privacy_details(self, privacy_data):
+        """Format privacy data for detailed view"""
+        details = []
+        
+        # Security details
+        security = privacy_data.get('security', {})
+        details.append("🔐 SECURITY ANALYSIS:")
+        details.append(f"  • HTTPS: {'✅ Yes' if security.get('isHttps') else '❌ No'}")
+        details.append(f"  • Content Security Policy: {'✅ Yes' if security.get('hasCSP') else '❌ No'}")
+        details.append(f"  • Referrer Policy: {security.get('referrerPolicy', 'default')}")
+        details.append("")
+        
+        # Cookies details
+        cookies = privacy_data.get('cookies', [])
+        details.append(f"🍪 COOKIES ({len(cookies)}):")
+        if cookies:
+            for cookie in cookies[:5]:  # Show first 5 cookies
+                secure = "🔒" if cookie.get('hasSecure') else "🔓"
+                details.append(f"  • {cookie.get('name', 'unnamed')} {secure} ({cookie.get('length', 0)} chars)")
+            if len(cookies) > 5:
+                details.append(f"  • ... and {len(cookies) - 5} more cookies")
+        else:
+            details.append("  • No cookies found")
+        details.append("")
+        
+        # Storage details
+        localStorage = privacy_data.get('localStorage', {})
+        sessionStorage = privacy_data.get('sessionStorage', {})
+        details.append("💾 BROWSER STORAGE:")
+        details.append(f"  • Local Storage: {localStorage.get('itemCount', 0)} items ({localStorage.get('totalSize', 0)} bytes)")
+        details.append(f"  • Session Storage: {sessionStorage.get('itemCount', 0)} items ({sessionStorage.get('totalSize', 0)} bytes)")
+        details.append("")
+        
+        # Trackers details
+        trackers = privacy_data.get('trackers', [])
+        details.append(f"📊 TRACKING SCRIPTS ({len(trackers)}):")
+        if trackers:
+            for tracker in trackers:
+                details.append(f"  • {tracker.get('domain', 'unknown')} ({tracker.get('type', 'unknown')})")
+        else:
+            details.append("  • No known tracking scripts detected")
+        details.append("")
+        
+        # Third-party requests
+        third_party = privacy_data.get('thirdPartyRequests', [])
+        details.append(f"🌐 THIRD-PARTY REQUESTS ({len(third_party)}):")
+        if third_party:
+            # Group by domain
+            domains = {}
+            for req in third_party:
+                domain = req.get('domain', 'unknown')
+                if domain not in domains:
+                    domains[domain] = []
+                domains[domain].append(req.get('type', 'unknown'))
+            
+            for domain, types in list(domains.items())[:10]:  # Show first 10 domains
+                type_counts = {}
+                for t in types:
+                    type_counts[t] = type_counts.get(t, 0) + 1
+                type_str = ", ".join([f"{count} {type}" for type, count in type_counts.items()])
+                details.append(f"  • {domain}: {type_str}")
+            
+            if len(domains) > 10:
+                details.append(f"  • ... and {len(domains) - 10} more domains")
+        else:
+            details.append("  • No third-party requests detected")
+        details.append("")
+        
+        # Forms details
+        forms = privacy_data.get('forms', [])
+        details.append(f"📝 FORMS ({len(forms)}):")
+        if forms:
+            for i, form in enumerate(forms):
+                secure = "🔒" if form.get('isHttps') else "🔓"
+                sensitive_count = len(form.get('sensitiveFields', []))
+                details.append(f"  • Form {i+1}: {form.get('method', 'GET').upper()} {secure} ({sensitive_count} sensitive fields)")
+        else:
+            details.append("  • No forms found")
+        details.append("")
+        
+        # Fingerprinting details
+        fingerprinting = privacy_data.get('fingerprinting', {})
+        details.append("🔍 FINGERPRINTING POTENTIAL:")
+        for method, detected in fingerprinting.items():
+            status = "✅ Possible" if detected else "❌ Not detected"
+            method_name = method.replace('Fingerprinting', '').replace('fingerprinting', '').title()
+            details.append(f"  • {method_name}: {status}")
+        
+        return "\n".join(details)
+    
+    def export_privacy_report(self, privacy_data, score, issues, recommendations, page_url):
+        """Export privacy analysis report to file"""
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            from datetime import datetime
+            import json
+            
+            # Generate filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            domain = page_url.split('/')[2] if '://' in page_url else 'unknown'
+            filename = f"privacy_report_{domain}_{timestamp}.json"
+            
+            # Show save dialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self.main_window,
+                "Export Privacy Report",
+                filename,
+                "JSON Files (*.json);;Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                report = {
+                    'url': page_url,
+                    'timestamp': datetime.now().isoformat(),
+                    'privacy_score': score,
+                    'issues': issues,
+                    'recommendations': recommendations,
+                    'raw_data': privacy_data
+                }
+                
+                if file_path.endswith('.txt'):
+                    # Export as readable text
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(f"Privacy Analysis Report\n")
+                        f.write(f"{'=' * 50}\n\n")
+                        f.write(f"URL: {page_url}\n")
+                        f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write(f"Privacy Score: {score}/100\n\n")
+                        
+                        f.write(f"Issues ({len(issues)}):\n")
+                        for issue in issues:
+                            f.write(f"  • {issue}\n")
+                        f.write("\n")
+                        
+                        f.write(f"Recommendations ({len(recommendations)}):\n")
+                        for rec in recommendations:
+                            f.write(f"  • {rec}\n")
+                        f.write("\n")
+                        
+                        f.write("Detailed Analysis:\n")
+                        f.write(self.format_privacy_details(privacy_data))
+                else:
+                    # Export as JSON
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(report, f, indent=2, ensure_ascii=False)
+                
+                self.main_window.status_info.setText(f"📄 Privacy report exported: {file_path}")
+                QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Export error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
     
     def analyze_ads(self, browser):
         """Analyze advertisements without removing them"""
