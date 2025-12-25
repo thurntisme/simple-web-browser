@@ -151,11 +151,19 @@ class TabManager:
         
         menu.addSeparator()
         
-        # Add screenshot option (only in web browser mode)
+        # Add screenshot options (only in web browser mode)
         if not (self.main_window.api_mode_enabled or self.main_window.cmd_mode_enabled or self.main_window.pdf_mode_enabled):
-            screenshot_action = QAction("📸 Take Screenshot", self.main_window)
-            screenshot_action.triggered.connect(lambda: self.take_screenshot(browser))
-            menu.addAction(screenshot_action)
+            screenshot_menu = menu.addMenu("📸 Screenshot")
+            
+            # Screenshot current viewport
+            viewport_action = QAction("📸 Current View", self.main_window)
+            viewport_action.triggered.connect(lambda: self.take_screenshot(browser, "viewport"))
+            screenshot_menu.addAction(viewport_action)
+            
+            # Screenshot full page
+            fullpage_action = QAction("📄 Full Page", self.main_window)
+            fullpage_action.triggered.connect(lambda: self.take_screenshot(browser, "fullpage"))
+            screenshot_menu.addAction(fullpage_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -176,8 +184,13 @@ class TabManager:
         if isinstance(current_widget, QSplitter):
             self.toggle_dev_tools(current_widget)
     
-    def take_screenshot(self, browser):
-        """Take a screenshot of the current web page"""
+    def take_screenshot(self, browser, screenshot_type="viewport"):
+        """Take a screenshot of the current web page
+        
+        Args:
+            browser: The QWebEngineView to capture
+            screenshot_type: "viewport" for current view, "fullpage" for entire page
+        """
         try:
             # Get the current page
             page = browser.page()
@@ -188,32 +201,28 @@ class TabManager:
             import re
             clean_title = re.sub(r'[<>:"/\\|?*]', '_', title)[:50]  # Limit length
             
-            # Generate filename with timestamp
+            # Generate filename with timestamp and type
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"screenshot_{clean_title}_{timestamp}.png"
+            type_suffix = "viewport" if screenshot_type == "viewport" else "fullpage"
+            filename = f"screenshot_{clean_title}_{type_suffix}_{timestamp}.png"
             
             # Show save dialog
             from PyQt5.QtWidgets import QFileDialog
             file_path, _ = QFileDialog.getSaveFileName(
                 self.main_window,
-                "Save Screenshot",
+                f"Save Screenshot ({type_suffix.title()})",
                 filename,
                 "PNG Images (*.png);;JPEG Images (*.jpg);;All Files (*.*)"
             )
             
             if file_path:
-                # Take screenshot of web content only (excluding scrollbars and UI elements)
-                page = browser.page()
-                
-                # Use QWebEnginePage's built-in screenshot functionality
-                # This captures only the web content without browser UI elements
                 def on_screenshot_ready(pixmap):
                     if not pixmap.isNull():
                         # Save the screenshot
                         if pixmap.save(file_path):
                             # Show success message
-                            self.main_window.status_info.setText(f"📸 Screenshot saved: {file_path}")
+                            self.main_window.status_info.setText(f"📸 {type_suffix.title()} screenshot saved: {file_path}")
                             QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
                             
                             # Optional: Show notification dialog
@@ -221,7 +230,7 @@ class TabManager:
                             reply = QMessageBox.question(
                                 self.main_window,
                                 "Screenshot Saved",
-                                f"Screenshot saved successfully!\n\n{file_path}\n\nWould you like to open the image?",
+                                f"{type_suffix.title()} screenshot saved successfully!\n\n{file_path}\n\nWould you like to open the image?",
                                 QMessageBox.Yes | QMessageBox.No,
                                 QMessageBox.No
                             )
@@ -247,65 +256,133 @@ class TabManager:
                         self.main_window.status_info.setText("❌ Failed to capture screenshot")
                         QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
                 
-                # Capture screenshot of web content only (excluding scrollbars and UI elements)
-                # Use a more aggressive approach to ensure scrollbars are completely removed
-                try:
-                    # Get the full browser screenshot first
-                    full_pixmap = browser.grab()
-                    
-                    # Get browser and page dimensions
-                    browser_size = browser.size()
-                    page_size = page.contentsSize().toSize()
-                    
-                    # Calculate scrollbar presence and dimensions more accurately
-                    style = browser.style()
-                    scrollbar_width = style.pixelMetric(style.PM_ScrollBarExtent)
-                    
-                    # Determine if scrollbars are present
-                    has_vertical_scrollbar = page_size.width() > browser_size.width()
-                    has_horizontal_scrollbar = page_size.height() > browser_size.height()
-                    
-                    # Calculate the clean content area
-                    content_width = browser_size.width()
-                    content_height = browser_size.height()
-                    
-                    # Remove scrollbar areas more aggressively
-                    if has_vertical_scrollbar:
-                        content_width -= (scrollbar_width + 2)  # Add extra margin for safety
-                    if has_horizontal_scrollbar:
-                        content_height -= (scrollbar_width + 2)  # Add extra margin for safety
-                    
-                    # Also remove a few extra pixels to ensure clean edges
-                    content_width = max(content_width - 5, content_width * 0.95)  # Remove 5px or 5% margin
-                    content_height = max(content_height - 5, content_height * 0.95)  # Remove 5px or 5% margin
-                    
-                    # Create the crop rectangle
-                    crop_rect = QRect(0, 0, int(content_width), int(content_height))
-                    
-                    # Crop the screenshot to remove scrollbars
-                    clean_pixmap = full_pixmap.copy(crop_rect)
-                    
-                    on_screenshot_ready(clean_pixmap)
-                        
-                except Exception as e:
-                    print(f"Screenshot capture error: {e}")
-                    # Ultimate fallback: aggressive cropping
+                if screenshot_type == "fullpage":
+                    # Full page screenshot - capture the entire scrollable content
                     try:
+                        # Method 1: Try using QWebEnginePage's built-in screenshot capability
+                        # This should capture the full page content
+                        
+                        def capture_with_page_method():
+                            # Use the page's built-in screenshot method if available
+                            if hasattr(page, 'save'):
+                                # Some versions have a direct save method
+                                if page.save(file_path):
+                                    on_screenshot_ready(QPixmap(file_path))
+                                    return
+                            
+                            # Fallback: scroll-based capture
+                            capture_by_scrolling()
+                        
+                        def capture_by_scrolling():
+                            # Get current scroll position to restore later
+                            page.runJavaScript("window.pageYOffset", lambda y: 
+                                page.runJavaScript("window.pageXOffset", lambda x: 
+                                    perform_scroll_capture(x, y)))
+                        
+                        def perform_scroll_capture(original_x, original_y):
+                            # Scroll to top-left corner
+                            page.runJavaScript("window.scrollTo(0, 0);")
+                            
+                            # Wait for scroll animation to complete
+                            def take_shot_after_scroll():
+                                # Capture the current view
+                                shot = browser.grab()
+                                
+                                # Restore original scroll position
+                                page.runJavaScript(f"window.scrollTo({original_x}, {original_y});")
+                                
+                                # Clean up the screenshot (remove scrollbars)
+                                try:
+                                    browser_size = browser.size()
+                                    style = browser.style()
+                                    scrollbar_width = style.pixelMetric(style.PM_ScrollBarExtent)
+                                    
+                                    # Calculate clean content area
+                                    clean_width = browser_size.width() - scrollbar_width - 3
+                                    clean_height = browser_size.height() - scrollbar_width - 3
+                                    
+                                    # Ensure positive dimensions
+                                    clean_width = max(clean_width, int(browser_size.width() * 0.9))
+                                    clean_height = max(clean_height, int(browser_size.height() * 0.9))
+                                    
+                                    crop_rect = QRect(0, 0, clean_width, clean_height)
+                                    clean_shot = shot.copy(crop_rect)
+                                    
+                                    on_screenshot_ready(clean_shot)
+                                except Exception as e:
+                                    print(f"Full page screenshot cleanup error: {e}")
+                                    on_screenshot_ready(shot)
+                            
+                            # Wait for scroll to complete
+                            QTimer.singleShot(600, take_shot_after_scroll)
+                        
+                        # Start with the page method, fallback to scrolling
+                        capture_with_page_method()
+                        
+                    except Exception as e:
+                        print(f"Full page screenshot error: {e}")
+                        # Ultimate fallback: treat as viewport screenshot
+                        self.take_screenshot(browser, "viewport")
+                    
+                else:
+                    # Viewport screenshot (current view) - remove scrollbars
+                    try:
+                        # Get the browser screenshot
                         full_pixmap = browser.grab()
-                        width = full_pixmap.width()
-                        height = full_pixmap.height()
                         
-                        # Remove 25 pixels from right and bottom to ensure scrollbars are gone
-                        crop_width = max(width - 25, int(width * 0.92))  # Remove 25px or 8%
-                        crop_height = max(height - 25, int(height * 0.92))  # Remove 25px or 8%
+                        # Get browser and page dimensions
+                        browser_size = browser.size()
+                        page_size = page.contentsSize().toSize()
                         
-                        crop_rect = QRect(0, 0, crop_width, crop_height)
-                        cropped_pixmap = full_pixmap.copy(crop_rect)
-                        on_screenshot_ready(cropped_pixmap)
-                    except Exception as final_e:
-                        print(f"Final fallback failed: {final_e}")
-                        # Last resort: use original pixmap
-                        on_screenshot_ready(browser.grab())
+                        # Calculate scrollbar presence and dimensions
+                        style = browser.style()
+                        scrollbar_width = style.pixelMetric(style.PM_ScrollBarExtent)
+                        
+                        # Determine if scrollbars are present
+                        has_vertical_scrollbar = page_size.width() > browser_size.width()
+                        has_horizontal_scrollbar = page_size.height() > browser_size.height()
+                        
+                        # Calculate the clean content area
+                        content_width = browser_size.width()
+                        content_height = browser_size.height()
+                        
+                        # Remove scrollbar areas more aggressively
+                        if has_vertical_scrollbar:
+                            content_width -= (scrollbar_width + 2)  # Add extra margin for safety
+                        if has_horizontal_scrollbar:
+                            content_height -= (scrollbar_width + 2)  # Add extra margin for safety
+                        
+                        # Also remove a few extra pixels to ensure clean edges
+                        content_width = max(content_width - 5, int(content_width * 0.95))  # Remove 5px or 5% margin
+                        content_height = max(content_height - 5, int(content_height * 0.95))  # Remove 5px or 5% margin
+                        
+                        # Create the crop rectangle
+                        crop_rect = QRect(0, 0, int(content_width), int(content_height))
+                        
+                        # Crop the screenshot to remove scrollbars
+                        clean_pixmap = full_pixmap.copy(crop_rect)
+                        
+                        on_screenshot_ready(clean_pixmap)
+                            
+                    except Exception as e:
+                        print(f"Viewport screenshot error: {e}")
+                        # Fallback: aggressive cropping
+                        try:
+                            full_pixmap = browser.grab()
+                            width = full_pixmap.width()
+                            height = full_pixmap.height()
+                            
+                            # Remove 25 pixels from right and bottom to ensure scrollbars are gone
+                            crop_width = max(width - 25, int(width * 0.92))  # Remove 25px or 8%
+                            crop_height = max(height - 25, int(height * 0.92))  # Remove 25px or 8%
+                            
+                            crop_rect = QRect(0, 0, crop_width, crop_height)
+                            cropped_pixmap = full_pixmap.copy(crop_rect)
+                            on_screenshot_ready(cropped_pixmap)
+                        except Exception as final_e:
+                            print(f"Final fallback failed: {final_e}")
+                            # Last resort: use original pixmap
+                            on_screenshot_ready(browser.grab())
                     
         except Exception as e:
             # Show error message

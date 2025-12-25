@@ -318,12 +318,20 @@ class MainWindow(QMainWindow):
         curl_action.triggered.connect(self.show_curl_tool)
         tools_menu.addAction(curl_action)
         
-        # Screenshot action
-        screenshot_action = QAction("📸 Take Screenshot", self)
-        screenshot_action.setShortcut("Ctrl+Shift+S")
-        screenshot_action.setStatusTip("Take a screenshot of the current page")
-        screenshot_action.triggered.connect(self.take_screenshot)
-        tools_menu.addAction(screenshot_action)
+        # Screenshot submenu
+        screenshot_menu = tools_menu.addMenu("📸 Screenshot")
+        
+        viewport_action = QAction("📸 Current View", self)
+        viewport_action.setShortcut("Ctrl+Shift+S")
+        viewport_action.setStatusTip("Take a screenshot of the current viewport")
+        viewport_action.triggered.connect(self.take_viewport_screenshot)
+        screenshot_menu.addAction(viewport_action)
+        
+        fullpage_action = QAction("📄 Full Page", self)
+        fullpage_action.setShortcut("Ctrl+Shift+F")
+        fullpage_action.setStatusTip("Take a screenshot of the entire page")
+        fullpage_action.triggered.connect(self.take_fullpage_screenshot)
+        screenshot_menu.addAction(fullpage_action)
         
         tools_menu.addSeparator()
         
@@ -867,7 +875,7 @@ class MainWindow(QMainWindow):
             self.curl_dialog.raise_()
             self.curl_dialog.activateWindow()
     
-    def take_screenshot(self):
+    def take_screenshot(self, screenshot_type="viewport"):
         """Take a screenshot of the current page (only works in web mode)"""
         # Only allow screenshot in web mode
         if self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled:
@@ -878,10 +886,18 @@ class MainWindow(QMainWindow):
         # Get current browser
         current_browser = self.get_current_browser()
         if current_browser and self.tab_manager:
-            self.tab_manager.take_screenshot(current_browser)
+            self.tab_manager.take_screenshot(current_browser, screenshot_type)
         else:
             self.status_info.setText("❌ No active web page for screenshot")
             QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+    
+    def take_viewport_screenshot(self):
+        """Take a screenshot of the current viewport"""
+        self.take_screenshot("viewport")
+    
+    def take_fullpage_screenshot(self):
+        """Take a screenshot of the full page"""
+        self.take_screenshot("fullpage")
     
     def show_urlbar_context_menu(self, position):
         """Show context menu for URL bar"""
