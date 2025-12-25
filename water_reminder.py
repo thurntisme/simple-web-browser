@@ -34,7 +34,9 @@ class WaterReminderManager(QObject):
             "work_start": "09:00",   # Work start time
             "work_end": "17:00",     # Work end time
             "sound_enabled": True,   # Play notification sound
-            "show_popup": True       # Show popup notification
+            "show_popup": True,      # Show popup notification
+            "system_notifications": True,  # Show system notifications
+            "countdown_enabled": True      # Show countdown in status bar
         }
         
         # Daily tracking
@@ -46,6 +48,14 @@ class WaterReminderManager(QObject):
         self.reminder_timer = QTimer()
         self.reminder_timer.timeout.connect(self.check_reminder)
         
+        # Countdown timer (updates every minute)
+        self.countdown_timer = QTimer()
+        self.countdown_timer.timeout.connect(self.update_countdown)
+        self.countdown_timer.start(60000)  # Update every minute
+        
+        # Countdown tracking
+        self.time_since_last_drink = 0  # minutes since last drink
+        
         # Load settings and data
         self.load_settings()
         self.load_daily_data()
@@ -53,6 +63,9 @@ class WaterReminderManager(QObject):
         # Start reminder system
         if self.settings["enabled"]:
             self.start_reminders()
+        
+        # Initialize countdown
+        self.update_countdown()
     
     def get_data_file_path(self):
         """Get path to water reminder data file"""
@@ -194,11 +207,114 @@ class WaterReminderManager(QObject):
             if self.settings["sound_enabled"]:
                 self.play_reminder_sound()
             
+            # Show system notification if enabled
+            if self.settings["system_notifications"]:
+                self.show_system_notification()
+            
             # Update status bar
             self.update_status_message()
         
         # Emit signal
         self.reminder_triggered.emit()
+    
+    def show_system_notification(self):
+        """Show system notification"""
+        try:
+            progress = self.get_daily_progress()
+            
+            # Create notification title and message
+            title = "💧 Water Reminder"
+            message = f"Time to drink water!\n"
+            message += f"Progress: {progress['progress_percent']:.0f}% ({progress['total_ml']}ml/{progress['goal_ml']}ml)\n"
+            
+            if self.time_since_last_drink > 0:
+                hours = self.time_since_last_drink // 60
+                minutes = self.time_since_last_drink % 60
+                if hours > 0:
+                    message += f"Last drink: {hours}h {minutes}m ago"
+                else:
+                    message += f"Last drink: {minutes}m ago"
+            
+            # Show system notification based on platform
+            if sys.platform == "win32":
+                self.show_windows_notification(title, message)
+            elif sys.platform == "darwin":  # macOS
+                self.show_macos_notification(title, message)
+            else:  # Linux and others
+                self.show_linux_notification(title, message)
+                
+        except Exception as e:
+            print(f"Error showing system notification: {e}")
+    
+    def show_windows_notification(self, title, message):
+        """Show Windows system notification"""
+        try:
+            # Try plyer first (more reliable)
+            from plyer import notification
+            notification.notify(
+                title=title,
+                message=message,
+                app_name="Water Reminder",
+                timeout=10
+            )
+        except ImportError:
+            try:
+                # Fallback to win10toast
+                import win10toast
+                toaster = win10toast.ToastNotifier()
+                toaster.show_toast(title, message, duration=10, threaded=True)
+            except (ImportError, Exception):
+                # Final fallback to basic Windows notification
+                try:
+                    import winsound
+                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                    print(f"Water Reminder: {message}")
+                except Exception:
+                    print(f"Water Reminder: {message}")
+    
+    def show_macos_notification(self, title, message):
+        """Show macOS system notification"""
+        try:
+            import subprocess
+            script = f'display notification "{message}" with title "{title}"'
+            subprocess.run(['osascript', '-e', script])
+        except Exception:
+            print(f"Water Reminder: {message}")
+    
+    def show_linux_notification(self, title, message):
+        """Show Linux system notification"""
+        try:
+            import subprocess
+            subprocess.run(['notify-send', title, message])
+        except Exception:
+            print(f"Water Reminder: {message}")
+    
+    def update_countdown(self):
+        """Update countdown timer since last drink"""
+        if self.last_drink_time:
+            now = datetime.now()
+            time_diff = now - self.last_drink_time
+            self.time_since_last_drink = int(time_diff.total_seconds() / 60)  # minutes
+        else:
+            self.time_since_last_drink = 0
+        
+        # Update status bar if countdown is enabled
+        if self.settings.get("countdown_enabled", True) and hasattr(self.parent_window, 'water_widget'):
+            self.parent_window.water_widget.update_countdown_display()
+    
+    def get_countdown_text(self):
+        """Get formatted countdown text"""
+        if self.time_since_last_drink == 0:
+            return "Just now"
+        elif self.time_since_last_drink < 60:
+            return f"{self.time_since_last_drink}m ago"
+        else:
+            hours = self.time_since_last_drink // 60
+            minutes = self.time_since_last_drink % 60
+            if minutes == 0:
+                return f"{hours}h ago"
+            else:
+                return f"{hours}h {minutes}m ago"
     
     def show_reminder_popup(self):
         """Show reminder popup dialog"""
@@ -211,7 +327,7 @@ class WaterReminderManager(QObject):
             # Use system beep as fallback
             if sys.platform == "win32":
                 import winsound
-                winsound.MessageBeep(winsound.MB_ICONINFORMATION)
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
             else:
                 # For other platforms, use QApplication beep
                 QApplication.beep()
@@ -237,6 +353,9 @@ class WaterReminderManager(QObject):
         self.daily_intake += amount_ml
         self.last_drink_time = now
         
+        # Reset countdown
+        self.time_since_last_drink = 0
+        
         # Add to drinks list
         drink_entry = {
             'time': now.isoformat(),
@@ -254,6 +373,9 @@ class WaterReminderManager(QObject):
         
         # Update status
         self.update_progress_status()
+        
+        # Update countdown display
+        self.update_countdown()
     
     def show_goal_reached_message(self):
         """Show congratulations message for reaching daily goal"""
@@ -783,6 +905,12 @@ class WaterReminderSettingsDialog(QDialog):
         self.popup_cb = QCheckBox("Show popup reminder")
         notification_layout.addWidget(self.popup_cb, 1, 0)
         
+        self.system_notifications_cb = QCheckBox("Show system notifications")
+        notification_layout.addWidget(self.system_notifications_cb, 0, 1)
+        
+        self.countdown_cb = QCheckBox("Show countdown in status bar")
+        notification_layout.addWidget(self.countdown_cb, 1, 1)
+        
         scroll_layout.addWidget(notification_group)
         
         # Statistics
@@ -844,6 +972,8 @@ class WaterReminderSettingsDialog(QDialog):
         
         self.sound_cb.setChecked(settings["sound_enabled"])
         self.popup_cb.setChecked(settings["show_popup"])
+        self.system_notifications_cb.setChecked(settings.get("system_notifications", True))
+        self.countdown_cb.setChecked(settings.get("countdown_enabled", True))
     
     def save_settings(self):
         """Save settings and apply changes"""
@@ -857,7 +987,9 @@ class WaterReminderSettingsDialog(QDialog):
             "work_start": self.work_start_time.time().toString("HH:mm"),
             "work_end": self.work_end_time.time().toString("HH:mm"),
             "sound_enabled": self.sound_cb.isChecked(),
-            "show_popup": self.popup_cb.isChecked()
+            "show_popup": self.popup_cb.isChecked(),
+            "system_notifications": self.system_notifications_cb.isChecked(),
+            "countdown_enabled": self.countdown_cb.isChecked()
         })
         
         # Save to file
@@ -947,28 +1079,22 @@ class WaterReminderWidget(QWidget):
         # Update progress percentage
         self.progress_label.setText(f"💧{progress['progress_percent']:.0f}%")
         
-        # Update tooltip
+        # Update tooltip with countdown information
         tooltip = f"Water Progress: {progress['total_ml']}ml / {progress['goal_ml']}ml\n"
         tooltip += f"Drinks today: {progress['drinks_count']}\n"
         tooltip += f"Remaining: {progress['remaining_ml']}ml"
         
         if progress['last_drink_time']:
             tooltip += f"\nLast drink: {progress['last_drink_time'].strftime('%H:%M')}"
+            # Add countdown information
+            countdown_text = self.water_manager.get_countdown_text()
+            tooltip += f"\nTime since last drink: {countdown_text}"
         
         tooltip += "\n\nClick for details and to log water intake"
         self.progress_label.setToolTip(tooltip)
         
-        # Color coding based on progress
-        if progress['progress_percent'] >= 100:
-            color = "#4CAF50"  # Green - goal reached
-        elif progress['progress_percent'] >= 75:
-            color = "#8BC34A"  # Light green - almost there
-        elif progress['progress_percent'] >= 50:
-            color = "#FFC107"  # Yellow - halfway
-        elif progress['progress_percent'] >= 25:
-            color = "#FF9800"  # Orange - need more
-        else:
-            color = "#F44336"  # Red - way behind
+        # Color coding based on progress and time since last drink
+        color = self.get_status_color(progress)
         
         # Update label style with color
         self.progress_label.setStyleSheet(f"""
@@ -985,6 +1111,35 @@ class WaterReminderWidget(QWidget):
                 border-color: #999;
             }}
         """)
+    
+    def get_status_color(self, progress):
+        """Get status color based on progress and time since last drink"""
+        # Check if it's been too long since last drink
+        time_since_minutes = self.water_manager.time_since_last_drink
+        reminder_interval = self.water_manager.settings["interval_minutes"]
+        
+        # If overdue for water, show warning colors
+        if time_since_minutes >= reminder_interval:
+            if time_since_minutes >= reminder_interval * 1.5:
+                return "#F44336"  # Red - seriously overdue
+            else:
+                return "#FF9800"  # Orange - overdue
+        
+        # Otherwise use progress-based colors
+        if progress['progress_percent'] >= 100:
+            return "#4CAF50"  # Green - goal reached
+        elif progress['progress_percent'] >= 75:
+            return "#8BC34A"  # Light green - almost there
+        elif progress['progress_percent'] >= 50:
+            return "#FFC107"  # Yellow - halfway
+        elif progress['progress_percent'] >= 25:
+            return "#FF9800"  # Orange - need more
+        else:
+            return "#F44336"  # Red - way behind
+    
+    def update_countdown_display(self):
+        """Update countdown display (called by manager)"""
+        self.update_display()
     
     def show_details(self):
         """Show detailed water reminder dialog"""

@@ -1,9 +1,22 @@
 # Browser Application Requirements
+
 # Core GUI Framework
 PyQt5>=5.15.0
 
 # PDF Viewer Support
 PyMuPDF>=1.20.0
+
+# Water Reminder Notification System
+# Cross-platform notifications (primary method)
+plyer>=2.1.0          
+
+# Windows-specific notifications (fallback method)
+# Note: win10toast may have some threading issues but works as fallback
+win10toast>=0.9       
+
+# Windows API support for notifications and system integration
+# Required for win10toast and Windows-specific features
+pypiwin32>=223        
 
 # Standard library modules (included with Python)
 # - os
@@ -17,6 +30,14 @@ PyMuPDF>=1.20.0
 # - time
 # - shlex
 # - urllib.parse
+
+# Installation Instructions:
+# 1. Install all requirements: py -m pip install -r requirements.txt
+# 2. For development: uncomment optional packages below
+# 3. For Linux users: plyer may require additional system packages
+#    - Ubuntu/Debian: sudo apt-get install libnotify-bin
+#    - Fedora: sudo dnf install libnotify
+# 4. For macOS users: plyer should work out of the box
 
 # Optional: Development and Testing
 # pytest>=6.0.0  # Uncomment if you want to add unit tests
