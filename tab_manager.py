@@ -417,6 +417,11 @@ class TabManager:
                 network_timeline_action = QAction("📊 Network Request Timeline", self.main_window)
                 network_timeline_action.triggered.connect(lambda: self.show_network_timeline(browser))
                 menu.addAction(network_timeline_action)
+                
+                # Add SEO Analyzer feature
+                seo_analyzer_action = QAction("🔍 SEO Analyzer", self.main_window)
+                seo_analyzer_action.triggered.connect(lambda: self.analyze_seo(browser))
+                menu.addAction(seo_analyzer_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -5634,3 +5639,1188 @@ class TabManager:
         
         # Show dialog
         dialog.exec_()
+    
+    def analyze_seo(self, browser):
+        """Analyze SEO factors of the current website"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🔍 Analyzing SEO factors...")
+            
+            # JavaScript to extract SEO-related data from the page
+            js_code = """
+            (function() {
+                var seo = {
+                    title: document.title || '',
+                    metaDescription: '',
+                    metaKeywords: '',
+                    headings: {
+                        h1: [],
+                        h2: [],
+                        h3: [],
+                        h4: [],
+                        h5: [],
+                        h6: []
+                    },
+                    images: [],
+                    links: {
+                        internal: [],
+                        external: []
+                    },
+                    meta: [],
+                    openGraph: {},
+                    twitterCard: {},
+                    schema: [],
+                    canonical: '',
+                    robots: '',
+                    viewport: '',
+                    lang: document.documentElement.lang || '',
+                    charset: '',
+                    performance: {
+                        loadTime: performance.timing ? (performance.timing.loadEventEnd - performance.timing.navigationStart) : 0,
+                        domContentLoaded: performance.timing ? (performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart) : 0
+                    }
+                };
+                
+                // Extract meta tags
+                var metaTags = document.getElementsByTagName('meta');
+                for (var i = 0; i < metaTags.length; i++) {
+                    var meta = metaTags[i];
+                    var name = meta.getAttribute('name') || meta.getAttribute('property') || meta.getAttribute('http-equiv');
+                    var content = meta.getAttribute('content') || '';
+                    
+                    if (name) {
+                        seo.meta.push({
+                            name: name,
+                            content: content
+                        });
+                        
+                        // Extract specific meta tags
+                        if (name.toLowerCase() === 'description') {
+                            seo.metaDescription = content;
+                        } else if (name.toLowerCase() === 'keywords') {
+                            seo.metaKeywords = content;
+                        } else if (name.toLowerCase() === 'robots') {
+                            seo.robots = content;
+                        } else if (name.toLowerCase() === 'viewport') {
+                            seo.viewport = content;
+                        } else if (name.startsWith('og:')) {
+                            seo.openGraph[name] = content;
+                        } else if (name.startsWith('twitter:')) {
+                            seo.twitterCard[name] = content;
+                        }
+                    }
+                    
+                    // Check for charset
+                    if (meta.getAttribute('charset')) {
+                        seo.charset = meta.getAttribute('charset');
+                    }
+                }
+                
+                // Extract headings
+                for (var level = 1; level <= 6; level++) {
+                    var headings = document.getElementsByTagName('h' + level);
+                    for (var i = 0; i < headings.length; i++) {
+                        seo.headings['h' + level].push({
+                            text: headings[i].textContent.trim(),
+                            id: headings[i].id || '',
+                            className: headings[i].className || ''
+                        });
+                    }
+                }
+                
+                // Extract images
+                var images = document.getElementsByTagName('img');
+                for (var i = 0; i < images.length; i++) {
+                    var img = images[i];
+                    seo.images.push({
+                        src: img.src || '',
+                        alt: img.alt || '',
+                        title: img.title || '',
+                        width: img.width || 0,
+                        height: img.height || 0,
+                        loading: img.loading || '',
+                        hasAlt: !!img.alt,
+                        hasTitle: !!img.title
+                    });
+                }
+                
+                // Extract links
+                var links = document.getElementsByTagName('a');
+                var currentDomain = window.location.hostname;
+                
+                for (var i = 0; i < links.length; i++) {
+                    var link = links[i];
+                    var href = link.href || '';
+                    var text = link.textContent.trim();
+                    
+                    if (href) {
+                        var linkData = {
+                            href: href,
+                            text: text,
+                            title: link.title || '',
+                            rel: link.rel || '',
+                            target: link.target || '',
+                            hasTitle: !!link.title,
+                            hasText: !!text
+                        };
+                        
+                        try {
+                            var linkUrl = new URL(href);
+                            if (linkUrl.hostname === currentDomain || href.startsWith('/') || href.startsWith('#')) {
+                                seo.links.internal.push(linkData);
+                            } else {
+                                seo.links.external.push(linkData);
+                            }
+                        } catch (e) {
+                            // Invalid URL, treat as internal
+                            seo.links.internal.push(linkData);
+                        }
+                    }
+                }
+                
+                // Extract canonical URL
+                var canonicalLink = document.querySelector('link[rel="canonical"]');
+                if (canonicalLink) {
+                    seo.canonical = canonicalLink.href || '';
+                }
+                
+                // Extract structured data (JSON-LD)
+                var scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                for (var i = 0; i < scripts.length; i++) {
+                    try {
+                        var jsonData = JSON.parse(scripts[i].textContent);
+                        seo.schema.push(jsonData);
+                    } catch (e) {
+                        // Invalid JSON, skip
+                    }
+                }
+                
+                return seo;
+            })();
+            """
+            
+            def process_seo_data(seo_data):
+                if not seo_data:
+                    self.main_window.status_info.setText("❌ Failed to analyze SEO data")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the SEO analyzer dialog
+                self.show_seo_analyzer_dialog(seo_data, current_url)
+            
+            # Execute JavaScript to get SEO data
+            page.runJavaScript(js_code, process_seo_data)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ SEO analysis error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_seo_analyzer_dialog(self, seo_data, base_url):
+        """Show dialog with SEO analysis results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView, 
+                                   QFileDialog, QScrollArea, QFrame, QProgressBar)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont, QColor
+        from datetime import datetime
+        import json
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"🔍 SEO Analyzer - {seo_data.get('title', 'Untitled')}")
+        dialog.setMinimumSize(1000, 800)
+        dialog.resize(1400, 900)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"SEO Analysis for: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #e8f5e8; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # SEO Score calculation
+        score, issues, recommendations = self.calculate_seo_score(seo_data)
+        
+        # Score display
+        score_frame = QFrame()
+        score_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px;")
+        score_layout = QHBoxLayout(score_frame)
+        
+        score_label = QLabel(f"SEO Score: {score}/100")
+        score_font = QFont()
+        score_font.setPointSize(16)
+        score_font.setBold(True)
+        score_label.setFont(score_font)
+        
+        # Color code the score
+        if score >= 80:
+            score_label.setStyleSheet("color: #28a745;")  # Green
+        elif score >= 60:
+            score_label.setStyleSheet("color: #ffc107;")  # Yellow
+        else:
+            score_label.setStyleSheet("color: #dc3545;")  # Red
+        
+        score_layout.addWidget(score_label)
+        
+        # Progress bar for score
+        score_progress = QProgressBar()
+        score_progress.setRange(0, 100)
+        score_progress.setValue(score)
+        score_progress.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid grey;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #28a745;
+                width: 20px;
+            }
+        """)
+        score_layout.addWidget(score_progress)
+        
+        layout.addWidget(score_frame)
+        
+        # Tab widget for different analysis sections
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Overview Tab
+        overview_widget = self.create_seo_overview_tab(seo_data, score, issues, recommendations)
+        tab_widget.addTab(overview_widget, "📊 Overview")
+        
+        # Meta Tags Tab
+        meta_widget = self.create_seo_meta_tab(seo_data)
+        tab_widget.addTab(meta_widget, f"🏷️ Meta Tags ({len(seo_data.get('meta', []))})")
+        
+        # Headings Tab
+        headings_widget = self.create_seo_headings_tab(seo_data)
+        total_headings = sum(len(headings) for headings in seo_data.get('headings', {}).values())
+        tab_widget.addTab(headings_widget, f"📝 Headings ({total_headings})")
+        
+        # Images Tab
+        images_widget = self.create_seo_images_tab(seo_data)
+        tab_widget.addTab(images_widget, f"🖼️ Images ({len(seo_data.get('images', []))})")
+        
+        # Links Tab
+        links_widget = self.create_seo_links_tab(seo_data)
+        total_links = len(seo_data.get('links', {}).get('internal', [])) + len(seo_data.get('links', {}).get('external', []))
+        tab_widget.addTab(links_widget, f"🔗 Links ({total_links})")
+        
+        # Technical Tab
+        technical_widget = self.create_seo_technical_tab(seo_data, base_url)
+        tab_widget.addTab(technical_widget, "⚙️ Technical")
+        
+        # Structured Data Tab
+        schema_widget = self.create_seo_schema_tab(seo_data)
+        tab_widget.addTab(schema_widget, f"📋 Schema ({len(seo_data.get('schema', []))})")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        export_button = QPushButton("💾 Export Report")
+        reanalyze_button = QPushButton("🔄 Re-analyze")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(reanalyze_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def export_report():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"seo_analysis_{timestamp}.json"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export SEO Analysis Report",
+                filename,
+                "JSON Files (*.json);;Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    export_data = {
+                        'url': base_url,
+                        'timestamp': datetime.now().isoformat(),
+                        'score': score,
+                        'issues': issues,
+                        'recommendations': recommendations,
+                        'seo_data': seo_data
+                    }
+                    
+                    if file_path.endswith('.json'):
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            json.dump(export_data, f, indent=2, ensure_ascii=False)
+                    else:
+                        # Export as text report
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(self.generate_seo_text_report(export_data))
+                    
+                    self.main_window.status_info.setText(f"✅ SEO report exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        def reanalyze():
+            dialog.accept()
+            # Re-run the analysis
+            browser = self.get_current_browser()
+            if browser:
+                self.analyze_seo(browser)
+        
+        # Connect buttons
+        export_button.clicked.connect(export_report)
+        reanalyze_button.clicked.connect(reanalyze)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
+        
+        # Update main window status
+        self.main_window.status_info.setText(f"🔍 SEO analysis complete - Score: {score}/100")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+    
+    def calculate_seo_score(self, seo_data):
+        """Calculate SEO score based on various factors"""
+        score = 0
+        max_score = 100
+        issues = []
+        recommendations = []
+        
+        # Title (15 points)
+        title = seo_data.get('title', '')
+        if title:
+            if 30 <= len(title) <= 60:
+                score += 15
+            elif len(title) > 0:
+                score += 10
+                if len(title) < 30:
+                    issues.append("Title is too short (< 30 characters)")
+                    recommendations.append("Expand your title to 30-60 characters for better SEO")
+                elif len(title) > 60:
+                    issues.append("Title is too long (> 60 characters)")
+                    recommendations.append("Shorten your title to 30-60 characters to avoid truncation")
+        else:
+            issues.append("Missing page title")
+            recommendations.append("Add a descriptive title tag to your page")
+        
+        # Meta Description (15 points)
+        meta_desc = seo_data.get('metaDescription', '')
+        if meta_desc:
+            if 120 <= len(meta_desc) <= 160:
+                score += 15
+            elif len(meta_desc) > 0:
+                score += 10
+                if len(meta_desc) < 120:
+                    issues.append("Meta description is too short (< 120 characters)")
+                    recommendations.append("Expand your meta description to 120-160 characters")
+                elif len(meta_desc) > 160:
+                    issues.append("Meta description is too long (> 160 characters)")
+                    recommendations.append("Shorten your meta description to 120-160 characters")
+        else:
+            issues.append("Missing meta description")
+            recommendations.append("Add a meta description to improve search result snippets")
+        
+        # Headings Structure (15 points)
+        headings = seo_data.get('headings', {})
+        h1_count = len(headings.get('h1', []))
+        
+        if h1_count == 1:
+            score += 10
+        elif h1_count == 0:
+            issues.append("Missing H1 heading")
+            recommendations.append("Add exactly one H1 heading to your page")
+        elif h1_count > 1:
+            issues.append(f"Multiple H1 headings found ({h1_count})")
+            recommendations.append("Use only one H1 heading per page")
+        
+        # Check heading hierarchy
+        has_h2 = len(headings.get('h2', [])) > 0
+        has_h3 = len(headings.get('h3', [])) > 0
+        
+        if has_h2:
+            score += 3
+        if has_h2 and has_h3:
+            score += 2
+        
+        # Images with Alt Text (10 points)
+        images = seo_data.get('images', [])
+        if images:
+            images_with_alt = sum(1 for img in images if img.get('hasAlt'))
+            alt_ratio = images_with_alt / len(images)
+            score += int(10 * alt_ratio)
+            
+            if alt_ratio < 1.0:
+                missing_alt = len(images) - images_with_alt
+                issues.append(f"{missing_alt} images missing alt text")
+                recommendations.append("Add descriptive alt text to all images for accessibility and SEO")
+        
+        # Internal/External Links (10 points)
+        links = seo_data.get('links', {})
+        internal_links = links.get('internal', [])
+        external_links = links.get('external', [])
+        
+        if len(internal_links) > 0:
+            score += 5
+        else:
+            issues.append("No internal links found")
+            recommendations.append("Add internal links to improve site navigation and SEO")
+        
+        if len(external_links) > 0:
+            score += 3
+            # Check for nofollow on external links
+            external_with_nofollow = sum(1 for link in external_links if 'nofollow' in link.get('rel', ''))
+            if external_with_nofollow < len(external_links):
+                recommendations.append("Consider adding rel='nofollow' to external links to preserve link equity")
+        
+        # Check for links without anchor text
+        links_without_text = sum(1 for link in internal_links + external_links if not link.get('hasText'))
+        if links_without_text > 0:
+            issues.append(f"{links_without_text} links without anchor text")
+            recommendations.append("Add descriptive anchor text to all links")
+        
+        score += 2  # Bonus for having links
+        
+        # Technical SEO (15 points)
+        # Canonical URL
+        if seo_data.get('canonical'):
+            score += 3
+        else:
+            recommendations.append("Add a canonical URL to prevent duplicate content issues")
+        
+        # Viewport meta tag
+        if seo_data.get('viewport'):
+            score += 3
+        else:
+            issues.append("Missing viewport meta tag")
+            recommendations.append("Add viewport meta tag for mobile responsiveness")
+        
+        # Language attribute
+        if seo_data.get('lang'):
+            score += 2
+        else:
+            issues.append("Missing language attribute")
+            recommendations.append("Add lang attribute to html element")
+        
+        # Charset
+        if seo_data.get('charset'):
+            score += 2
+        else:
+            issues.append("Missing charset declaration")
+            recommendations.append("Add charset meta tag (preferably UTF-8)")
+        
+        # Robots meta tag
+        robots = seo_data.get('robots', '')
+        if robots and 'noindex' not in robots.lower():
+            score += 2
+        elif 'noindex' in robots.lower():
+            issues.append("Page is set to noindex")
+            recommendations.append("Remove noindex directive if you want this page to be indexed")
+        
+        # Performance (basic check)
+        performance = seo_data.get('performance', {})
+        load_time = performance.get('loadTime', 0)
+        if load_time > 0:
+            if load_time < 3000:  # Less than 3 seconds
+                score += 3
+            elif load_time < 5000:  # Less than 5 seconds
+                score += 1
+            else:
+                issues.append(f"Slow page load time ({load_time/1000:.1f}s)")
+                recommendations.append("Optimize page load time to under 3 seconds")
+        
+        # Social Media Tags (10 points)
+        og_tags = seo_data.get('openGraph', {})
+        twitter_tags = seo_data.get('twitterCard', {})
+        
+        if og_tags:
+            score += 5
+            if 'og:title' not in og_tags:
+                recommendations.append("Add og:title for better social media sharing")
+            if 'og:description' not in og_tags:
+                recommendations.append("Add og:description for better social media sharing")
+            if 'og:image' not in og_tags:
+                recommendations.append("Add og:image for better social media sharing")
+        else:
+            recommendations.append("Add Open Graph tags for better social media sharing")
+        
+        if twitter_tags:
+            score += 3
+        else:
+            recommendations.append("Add Twitter Card tags for better Twitter sharing")
+        
+        # Structured Data (10 points)
+        schema = seo_data.get('schema', [])
+        if schema:
+            score += 10
+        else:
+            recommendations.append("Add structured data (JSON-LD) to help search engines understand your content")
+        
+        # Ensure score doesn't exceed maximum
+        score = min(score, max_score)
+        
+        return score, issues, recommendations
+    
+    def create_seo_overview_tab(self, seo_data, score, issues, recommendations):
+        """Create the overview tab for SEO analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QFrame, QScrollArea)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # Basic Information
+        basic_frame = QFrame()
+        basic_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px;")
+        basic_layout = QVBoxLayout(basic_frame)
+        
+        basic_title = QLabel("📋 Basic Information")
+        basic_title.setFont(QFont("Arial", 12, QFont.Bold))
+        basic_layout.addWidget(basic_title)
+        
+        title = seo_data.get('title', 'No title')
+        meta_desc = seo_data.get('metaDescription', 'No meta description')
+        
+        basic_layout.addWidget(QLabel(f"Title: {title} ({len(title)} chars)"))
+        basic_layout.addWidget(QLabel(f"Meta Description: {meta_desc[:100]}{'...' if len(meta_desc) > 100 else ''} ({len(meta_desc)} chars)"))
+        basic_layout.addWidget(QLabel(f"Language: {seo_data.get('lang', 'Not specified')}"))
+        basic_layout.addWidget(QLabel(f"Charset: {seo_data.get('charset', 'Not specified')}"))
+        
+        scroll_layout.addWidget(basic_frame)
+        
+        # Issues Section
+        if issues:
+            issues_frame = QFrame()
+            issues_frame.setStyleSheet("background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; padding: 10px;")
+            issues_layout = QVBoxLayout(issues_frame)
+            
+            issues_title = QLabel(f"⚠️ Issues Found ({len(issues)})")
+            issues_title.setFont(QFont("Arial", 12, QFont.Bold))
+            issues_layout.addWidget(issues_title)
+            
+            for issue in issues:
+                issue_label = QLabel(f"• {issue}")
+                issue_label.setWordWrap(True)
+                issues_layout.addWidget(issue_label)
+            
+            scroll_layout.addWidget(issues_frame)
+        
+        # Recommendations Section
+        if recommendations:
+            rec_frame = QFrame()
+            rec_frame.setStyleSheet("background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px; padding: 10px;")
+            rec_layout = QVBoxLayout(rec_frame)
+            
+            rec_title = QLabel(f"💡 Recommendations ({len(recommendations)})")
+            rec_title.setFont(QFont("Arial", 12, QFont.Bold))
+            rec_layout.addWidget(rec_title)
+            
+            for rec in recommendations:
+                rec_label = QLabel(f"• {rec}")
+                rec_label.setWordWrap(True)
+                rec_layout.addWidget(rec_label)
+            
+            scroll_layout.addWidget(rec_frame)
+        
+        # Quick Stats
+        stats_frame = QFrame()
+        stats_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 10px;")
+        stats_layout = QVBoxLayout(stats_frame)
+        
+        stats_title = QLabel("📊 Quick Statistics")
+        stats_title.setFont(QFont("Arial", 12, QFont.Bold))
+        stats_layout.addWidget(stats_title)
+        
+        headings = seo_data.get('headings', {})
+        images = seo_data.get('images', [])
+        links = seo_data.get('links', {})
+        
+        stats_layout.addWidget(QLabel(f"H1 Headings: {len(headings.get('h1', []))}"))
+        stats_layout.addWidget(QLabel(f"Total Headings: {sum(len(h) for h in headings.values())}"))
+        stats_layout.addWidget(QLabel(f"Images: {len(images)} (Alt text: {sum(1 for img in images if img.get('hasAlt'))})"))
+        stats_layout.addWidget(QLabel(f"Internal Links: {len(links.get('internal', []))}"))
+        stats_layout.addWidget(QLabel(f"External Links: {len(links.get('external', []))}"))
+        stats_layout.addWidget(QLabel(f"Meta Tags: {len(seo_data.get('meta', []))}"))
+        stats_layout.addWidget(QLabel(f"Structured Data: {len(seo_data.get('schema', []))} items"))
+        
+        scroll_layout.addWidget(stats_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def create_seo_meta_tab(self, seo_data):
+        """Create the meta tags tab for SEO analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🏷️ Meta Tags Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Tree widget for meta tags
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Name/Property', 'Content', 'Length', 'Status'])
+        tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        
+        meta_tags = seo_data.get('meta', [])
+        
+        # Important meta tags to check
+        important_tags = {
+            'description': seo_data.get('metaDescription', ''),
+            'keywords': seo_data.get('metaKeywords', ''),
+            'robots': seo_data.get('robots', ''),
+            'viewport': seo_data.get('viewport', ''),
+            'charset': seo_data.get('charset', '')
+        }
+        
+        # Add important tags first
+        for tag_name, content in important_tags.items():
+            item = QTreeWidgetItem()
+            item.setText(0, tag_name)
+            item.setText(1, content[:100] + ('...' if len(content) > 100 else ''))
+            item.setText(2, str(len(content)))
+            
+            # Status based on content and best practices
+            if not content:
+                item.setText(3, '❌ Missing')
+                item.setBackground(3, QColor(255, 182, 193))  # Light red
+            elif tag_name == 'description' and (len(content) < 120 or len(content) > 160):
+                item.setText(3, '⚠️ Length issue')
+                item.setBackground(3, QColor(255, 255, 0))  # Yellow
+            elif tag_name == 'viewport' and 'width=device-width' not in content:
+                item.setText(3, '⚠️ Not responsive')
+                item.setBackground(3, QColor(255, 255, 0))  # Yellow
+            else:
+                item.setText(3, '✅ Good')
+                item.setBackground(3, QColor(144, 238, 144))  # Light green
+            
+            tree.addTopLevelItem(item)
+        
+        # Add separator
+        separator = QTreeWidgetItem()
+        separator.setText(0, "--- Other Meta Tags ---")
+        separator.setBackground(0, QColor(211, 211, 211))  # Light gray
+        tree.addTopLevelItem(separator)
+        
+        # Add other meta tags
+        for meta in meta_tags:
+            name = meta.get('name', '')
+            content = meta.get('content', '')
+            
+            # Skip if already added above
+            if name.lower() in important_tags:
+                continue
+            
+            item = QTreeWidgetItem()
+            item.setText(0, name)
+            item.setText(1, content[:100] + ('...' if len(content) > 100 else ''))
+            item.setText(2, str(len(content)))
+            item.setText(3, '✅ Present')
+            item.setBackground(3, QColor(144, 238, 144))  # Light green
+            
+            tree.addTopLevelItem(item)
+        
+        layout.addWidget(tree)
+        
+        return widget
+    
+    def create_seo_headings_tab(self, seo_data):
+        """Create the headings tab for SEO analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("📝 Headings Structure Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Tree widget for headings
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Level', 'Text', 'ID', 'Class', 'Length'])
+        tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
+        headings = seo_data.get('headings', {})
+        
+        # Add headings in hierarchical order
+        for level in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+            level_headings = headings.get(level, [])
+            
+            if level_headings:
+                # Add level separator
+                level_item = QTreeWidgetItem()
+                level_item.setText(0, f"{level.upper()} ({len(level_headings)})")
+                level_item.setBackground(0, QColor(211, 211, 211))  # Light gray
+                tree.addTopLevelItem(level_item)
+                
+                for heading in level_headings:
+                    item = QTreeWidgetItem()
+                    item.setText(0, level.upper())
+                    
+                    text = heading.get('text', '')
+                    item.setText(1, text[:80] + ('...' if len(text) > 80 else ''))
+                    item.setText(2, heading.get('id', ''))
+                    item.setText(3, heading.get('className', ''))
+                    item.setText(4, str(len(text)))
+                    
+                    # Color code based on level and best practices
+                    if level == 'h1':
+                        item.setBackground(0, QColor(144, 238, 144) if len(level_headings) == 1 else QColor(255, 182, 193))
+                    elif level == 'h2':
+                        item.setBackground(0, QColor(173, 255, 173))
+                    else:
+                        item.setBackground(0, QColor(255, 255, 255))
+                    
+                    tree.addTopLevelItem(item)
+        
+        layout.addWidget(tree)
+        
+        return widget
+    
+    def create_seo_images_tab(self, seo_data):
+        """Create the images tab for SEO analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🖼️ Images SEO Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Tree widget for images
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Source', 'Alt Text', 'Title', 'Dimensions', 'Loading', 'Status'])
+        tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        
+        images = seo_data.get('images', [])
+        
+        for img in images:
+            item = QTreeWidgetItem()
+            
+            # Source (truncated)
+            src = img.get('src', '')
+            item.setText(0, src[-50:] if len(src) > 50 else src)
+            
+            # Alt text
+            alt = img.get('alt', '')
+            item.setText(1, alt[:50] + ('...' if len(alt) > 50 else ''))
+            
+            # Title
+            title = img.get('title', '')
+            item.setText(2, title[:30] + ('...' if len(title) > 30 else ''))
+            
+            # Dimensions
+            width = img.get('width', 0)
+            height = img.get('height', 0)
+            if width and height:
+                item.setText(3, f"{width}x{height}")
+            else:
+                item.setText(3, "Unknown")
+            
+            # Loading attribute
+            loading = img.get('loading', '')
+            item.setText(4, loading or 'default')
+            
+            # Status
+            if not img.get('hasAlt'):
+                item.setText(5, '❌ No Alt')
+                item.setBackground(5, QColor(255, 182, 193))  # Light red
+            elif len(alt) < 10:
+                item.setText(5, '⚠️ Short Alt')
+                item.setBackground(5, QColor(255, 255, 0))  # Yellow
+            else:
+                item.setText(5, '✅ Good')
+                item.setBackground(5, QColor(144, 238, 144))  # Light green
+            
+            tree.addTopLevelItem(item)
+        
+        layout.addWidget(tree)
+        
+        return widget
+    
+    def create_seo_links_tab(self, seo_data):
+        """Create the links tab for SEO analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel, QTabWidget)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🔗 Links SEO Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Sub-tabs for internal and external links
+        links_tabs = QTabWidget()
+        layout.addWidget(links_tabs)
+        
+        links = seo_data.get('links', {})
+        internal_links = links.get('internal', [])
+        external_links = links.get('external', [])
+        
+        # Internal Links Tab
+        internal_widget = QWidget()
+        internal_layout = QVBoxLayout(internal_widget)
+        
+        internal_tree = QTreeWidget()
+        internal_tree.setHeaderLabels(['URL', 'Anchor Text', 'Title', 'Target', 'Status'])
+        internal_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        internal_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        internal_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        internal_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        internal_tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
+        for link in internal_links:
+            item = QTreeWidgetItem()
+            
+            href = link.get('href', '')
+            item.setText(0, href[:60] + ('...' if len(href) > 60 else ''))
+            
+            text = link.get('text', '')
+            item.setText(1, text[:40] + ('...' if len(text) > 40 else ''))
+            
+            item.setText(2, link.get('title', ''))
+            item.setText(3, link.get('target', ''))
+            
+            # Status
+            if not link.get('hasText'):
+                item.setText(4, '❌ No Text')
+                item.setBackground(4, QColor(255, 182, 193))  # Light red
+            elif len(text) < 3:
+                item.setText(4, '⚠️ Short Text')
+                item.setBackground(4, QColor(255, 255, 0))  # Yellow
+            else:
+                item.setText(4, '✅ Good')
+                item.setBackground(4, QColor(144, 238, 144))  # Light green
+            
+            internal_tree.addTopLevelItem(item)
+        
+        internal_layout.addWidget(internal_tree)
+        links_tabs.addTab(internal_widget, f"Internal ({len(internal_links)})")
+        
+        # External Links Tab
+        external_widget = QWidget()
+        external_layout = QVBoxLayout(external_widget)
+        
+        external_tree = QTreeWidget()
+        external_tree.setHeaderLabels(['URL', 'Anchor Text', 'Rel', 'Target', 'Status'])
+        external_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        external_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        external_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        external_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        external_tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
+        for link in external_links:
+            item = QTreeWidgetItem()
+            
+            href = link.get('href', '')
+            item.setText(0, href[:60] + ('...' if len(href) > 60 else ''))
+            
+            text = link.get('text', '')
+            item.setText(1, text[:40] + ('...' if len(text) > 40 else ''))
+            
+            rel = link.get('rel', '')
+            item.setText(2, rel)
+            item.setText(3, link.get('target', ''))
+            
+            # Status
+            if not link.get('hasText'):
+                item.setText(4, '❌ No Text')
+                item.setBackground(4, QColor(255, 182, 193))  # Light red
+            elif 'nofollow' not in rel:
+                item.setText(4, '⚠️ No nofollow')
+                item.setBackground(4, QColor(255, 255, 0))  # Yellow
+            else:
+                item.setText(4, '✅ Good')
+                item.setBackground(4, QColor(144, 238, 144))  # Light green
+            
+            external_tree.addTopLevelItem(item)
+        
+        external_layout.addWidget(external_tree)
+        links_tabs.addTab(external_widget, f"External ({len(external_links)})")
+        
+        return widget
+    
+    def create_seo_technical_tab(self, seo_data, base_url):
+        """Create the technical SEO tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QFrame, QScrollArea)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("⚙️ Technical SEO Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # URL Structure
+        url_frame = QFrame()
+        url_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px;")
+        url_layout = QVBoxLayout(url_frame)
+        
+        url_title = QLabel("🌐 URL Structure")
+        url_title.setFont(QFont("Arial", 12, QFont.Bold))
+        url_layout.addWidget(url_title)
+        
+        url_layout.addWidget(QLabel(f"Current URL: {base_url}"))
+        url_layout.addWidget(QLabel(f"Canonical: {seo_data.get('canonical', 'Not set')}"))
+        
+        # URL analysis
+        if len(base_url) > 100:
+            url_layout.addWidget(QLabel("⚠️ URL is quite long (>100 chars)"))
+        if '_' in base_url:
+            url_layout.addWidget(QLabel("⚠️ URL contains underscores (hyphens preferred)"))
+        if base_url.count('/') > 5:
+            url_layout.addWidget(QLabel("⚠️ URL has deep directory structure"))
+        
+        scroll_layout.addWidget(url_frame)
+        
+        # Mobile & Responsive
+        mobile_frame = QFrame()
+        mobile_frame.setStyleSheet("background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 10px;")
+        mobile_layout = QVBoxLayout(mobile_frame)
+        
+        mobile_title = QLabel("📱 Mobile & Responsive")
+        mobile_title.setFont(QFont("Arial", 12, QFont.Bold))
+        mobile_layout.addWidget(mobile_title)
+        
+        viewport = seo_data.get('viewport', '')
+        if viewport:
+            mobile_layout.addWidget(QLabel(f"✅ Viewport: {viewport}"))
+            if 'width=device-width' in viewport:
+                mobile_layout.addWidget(QLabel("✅ Responsive design detected"))
+            else:
+                mobile_layout.addWidget(QLabel("⚠️ May not be fully responsive"))
+        else:
+            mobile_layout.addWidget(QLabel("❌ No viewport meta tag"))
+        
+        scroll_layout.addWidget(mobile_frame)
+        
+        # Performance
+        perf_frame = QFrame()
+        perf_frame.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 10px;")
+        perf_layout = QVBoxLayout(perf_frame)
+        
+        perf_title = QLabel("⚡ Performance")
+        perf_title.setFont(QFont("Arial", 12, QFont.Bold))
+        perf_layout.addWidget(perf_title)
+        
+        performance = seo_data.get('performance', {})
+        load_time = performance.get('loadTime', 0)
+        dom_time = performance.get('domContentLoaded', 0)
+        
+        if load_time > 0:
+            perf_layout.addWidget(QLabel(f"Page Load Time: {load_time/1000:.2f}s"))
+            if load_time < 3000:
+                perf_layout.addWidget(QLabel("✅ Good load time (<3s)"))
+            elif load_time < 5000:
+                perf_layout.addWidget(QLabel("⚠️ Moderate load time (3-5s)"))
+            else:
+                perf_layout.addWidget(QLabel("❌ Slow load time (>5s)"))
+        
+        if dom_time > 0:
+            perf_layout.addWidget(QLabel(f"DOM Content Loaded: {dom_time/1000:.2f}s"))
+        
+        scroll_layout.addWidget(perf_frame)
+        
+        # Security & Protocol
+        security_frame = QFrame()
+        security_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 10px;")
+        security_layout = QVBoxLayout(security_frame)
+        
+        security_title = QLabel("🔒 Security & Protocol")
+        security_title.setFont(QFont("Arial", 12, QFont.Bold))
+        security_layout.addWidget(security_title)
+        
+        if base_url.startswith('https://'):
+            security_layout.addWidget(QLabel("✅ HTTPS enabled"))
+        else:
+            security_layout.addWidget(QLabel("❌ Not using HTTPS"))
+        
+        robots = seo_data.get('robots', '')
+        if robots:
+            security_layout.addWidget(QLabel(f"Robots directive: {robots}"))
+        else:
+            security_layout.addWidget(QLabel("No robots meta tag"))
+        
+        scroll_layout.addWidget(security_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def create_seo_schema_tab(self, seo_data):
+        """Create the structured data/schema tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QLabel, 
+                                   QTreeWidget, QTreeWidgetItem, QTabWidget)
+        from PyQt5.QtCore import Qt
+        import json
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("📋 Structured Data (Schema.org)")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        schema_data = seo_data.get('schema', [])
+        
+        if not schema_data:
+            no_schema_label = QLabel("❌ No structured data found on this page.\n\nStructured data helps search engines understand your content better.\nConsider adding JSON-LD structured data.")
+            no_schema_label.setStyleSheet("padding: 20px; background-color: #f8d7da; border-radius: 5px; color: #721c24;")
+            no_schema_label.setWordWrap(True)
+            layout.addWidget(no_schema_label)
+        else:
+            # Tabs for each schema item
+            schema_tabs = QTabWidget()
+            layout.addWidget(schema_tabs)
+            
+            for i, schema_item in enumerate(schema_data):
+                # Create tab for this schema item
+                schema_widget = QWidget()
+                schema_layout = QVBoxLayout(schema_widget)
+                
+                # Schema type
+                schema_type = schema_item.get('@type', 'Unknown')
+                type_label = QLabel(f"Schema Type: {schema_type}")
+                type_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #d4edda; border-radius: 3px;")
+                schema_layout.addWidget(type_label)
+                
+                # JSON view
+                json_text = QTextEdit()
+                json_text.setReadOnly(True)
+                json_text.setStyleSheet("font-family: monospace; background-color: #f8f9fa;")
+                
+                try:
+                    formatted_json = json.dumps(schema_item, indent=2, ensure_ascii=False)
+                    json_text.setPlainText(formatted_json)
+                except:
+                    json_text.setPlainText(str(schema_item))
+                
+                schema_layout.addWidget(json_text)
+                
+                tab_name = f"{schema_type} ({i+1})" if len(schema_data) > 1 else schema_type
+                schema_tabs.addTab(schema_widget, tab_name)
+        
+        return widget
+    
+    def generate_seo_text_report(self, export_data):
+        """Generate a text-based SEO report"""
+        lines = []
+        lines.append("SEO ANALYSIS REPORT")
+        lines.append("=" * 50)
+        lines.append(f"URL: {export_data['url']}")
+        lines.append(f"Analysis Date: {export_data['timestamp']}")
+        lines.append(f"SEO Score: {export_data['score']}/100")
+        lines.append("")
+        
+        # Issues
+        if export_data['issues']:
+            lines.append("ISSUES FOUND:")
+            lines.append("-" * 20)
+            for issue in export_data['issues']:
+                lines.append(f"• {issue}")
+            lines.append("")
+        
+        # Recommendations
+        if export_data['recommendations']:
+            lines.append("RECOMMENDATIONS:")
+            lines.append("-" * 20)
+            for rec in export_data['recommendations']:
+                lines.append(f"• {rec}")
+            lines.append("")
+        
+        # Detailed data
+        seo_data = export_data['seo_data']
+        
+        lines.append("DETAILED ANALYSIS:")
+        lines.append("-" * 20)
+        lines.append(f"Title: {seo_data.get('title', 'N/A')} ({len(seo_data.get('title', ''))} chars)")
+        lines.append(f"Meta Description: {seo_data.get('metaDescription', 'N/A')} ({len(seo_data.get('metaDescription', ''))} chars)")
+        lines.append(f"Language: {seo_data.get('lang', 'Not specified')}")
+        lines.append(f"Canonical URL: {seo_data.get('canonical', 'Not set')}")
+        lines.append("")
+        
+        # Headings
+        headings = seo_data.get('headings', {})
+        lines.append("HEADINGS STRUCTURE:")
+        for level in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+            count = len(headings.get(level, []))
+            if count > 0:
+                lines.append(f"  {level.upper()}: {count}")
+        lines.append("")
+        
+        # Images
+        images = seo_data.get('images', [])
+        images_with_alt = sum(1 for img in images if img.get('hasAlt'))
+        lines.append(f"IMAGES: {len(images)} total, {images_with_alt} with alt text")
+        lines.append("")
+        
+        # Links
+        links = seo_data.get('links', {})
+        lines.append(f"LINKS: {len(links.get('internal', []))} internal, {len(links.get('external', []))} external")
+        lines.append("")
+        
+        return '\n'.join(lines)
