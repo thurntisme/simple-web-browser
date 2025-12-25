@@ -333,6 +333,13 @@ class MainWindow(QMainWindow):
         fullpage_action.triggered.connect(self.take_fullpage_screenshot)
         screenshot_menu.addAction(fullpage_action)
         
+        # Broken link scanner
+        link_scanner_action = QAction("🔗 Scan for Broken Links", self)
+        link_scanner_action.setShortcut("Ctrl+Shift+L")
+        link_scanner_action.setStatusTip("Scan current page for broken links")
+        link_scanner_action.triggered.connect(self.scan_broken_links)
+        tools_menu.addAction(link_scanner_action)
+        
         tools_menu.addSeparator()
         
         # Mode switching actions
@@ -898,6 +905,27 @@ class MainWindow(QMainWindow):
     def take_fullpage_screenshot(self):
         """Take a screenshot of the full page"""
         self.take_screenshot("fullpage")
+    
+    def scan_broken_links(self):
+        """Scan current page for broken links (only works in web mode)"""
+        # Only allow link scanning in web mode
+        if self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled:
+            self.status_info.setText("Link scanning only available in Web Browser mode")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+            return
+        
+        # Get current browser
+        current_browser = self.get_current_browser()
+        if current_browser and self.tab_manager:
+            current_url = current_browser.url().toString()
+            if current_url and current_url != "about:blank" and not current_url.startswith("data:"):
+                self.tab_manager.scan_broken_links(current_browser)
+            else:
+                self.status_info.setText("❌ Cannot scan links on this page")
+                QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+        else:
+            self.status_info.setText("❌ No active web page for link scanning")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
     
     def show_urlbar_context_menu(self, position):
         """Show context menu for URL bar"""

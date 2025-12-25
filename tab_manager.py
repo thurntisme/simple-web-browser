@@ -164,6 +164,14 @@ class TabManager:
             fullpage_action = QAction("📄 Full Page", self.main_window)
             fullpage_action.triggered.connect(lambda: self.take_screenshot(browser, "fullpage"))
             screenshot_menu.addAction(fullpage_action)
+            
+            menu.addSeparator()
+            
+            # Add broken link scanner (only for web pages)
+            if current_url and current_url != "about:blank" and not current_url.startswith("data:"):
+                link_scanner_action = QAction("🔗 Scan for Broken Links", self.main_window)
+                link_scanner_action.triggered.connect(lambda: self.scan_broken_links(browser))
+                menu.addAction(link_scanner_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -388,6 +396,301 @@ class TabManager:
             # Show error message
             self.main_window.status_info.setText(f"❌ Screenshot error: {str(e)}")
             QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def scan_broken_links(self, browser):
+        """Scan the current page for broken links"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🔗 Scanning for broken links...")
+            
+            # JavaScript to extract all links from the page
+            js_code = """
+            (function() {
+                var links = [];
+                var anchors = document.getElementsByTagName('a');
+                for (var i = 0; i < anchors.length; i++) {
+                    var href = anchors[i].href;
+                    if (href && href.trim() !== '' && !href.startsWith('javascript:') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
+                        links.push({
+                            url: href,
+                            text: anchors[i].textContent.trim() || anchors[i].innerText.trim() || '[No text]',
+                            title: anchors[i].title || ''
+                        });
+                    }
+                }
+                return links;
+            })();
+            """
+            
+            def process_links(links):
+                if not links:
+                    self.main_window.status_info.setText("ℹ️ No links found on this page")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the broken link scanner dialog
+                self.show_broken_link_dialog(links, current_url)
+            
+            # Execute JavaScript to get all links
+            page.runJavaScript(js_code, process_links)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Link scan error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_broken_link_dialog(self, links, base_url):
+        """Show dialog with broken link scanner results"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton, QProgressBar, QSplitter
+        from PyQt5.QtCore import QThread, pyqtSignal
+        import urllib.request
+        import urllib.parse
+        from urllib.error import URLError, HTTPError
+        import ssl
+        
+        class LinkCheckerThread(QThread):
+            """Thread to check links without blocking UI"""
+            progress_updated = pyqtSignal(int, int, str)  # current, total, status
+            link_checked = pyqtSignal(dict)  # link result
+            finished_checking = pyqtSignal()
+            
+            def __init__(self, links, base_url):
+                super().__init__()
+                self.links = links
+                self.base_url = base_url
+                self.should_stop = False
+            
+            def stop(self):
+                self.should_stop = True
+            
+            def run(self):
+                total_links = len(self.links)
+                broken_links = []
+                working_links = []
+                
+                # Create SSL context that doesn't verify certificates (for testing)
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                
+                for i, link in enumerate(self.links):
+                    if self.should_stop:
+                        break
+                    
+                    url = link['url']
+                    self.progress_updated.emit(i + 1, total_links, f"Checking: {url[:50]}...")
+                    
+                    try:
+                        # Handle relative URLs
+                        if not url.startswith(('http://', 'https://')):
+                            url = urllib.parse.urljoin(self.base_url, url)
+                        
+                        # Create request with headers to avoid being blocked
+                        req = urllib.request.Request(url)
+                        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+                        req.add_header('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8')
+                        
+                        # Try to open the URL
+                        with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
+                            status_code = response.getcode()
+                            if status_code >= 400:
+                                link['status'] = f"Error {status_code}"
+                                link['working'] = False
+                                broken_links.append(link)
+                            else:
+                                link['status'] = f"OK ({status_code})"
+                                link['working'] = True
+                                working_links.append(link)
+                    
+                    except HTTPError as e:
+                        link['status'] = f"HTTP Error {e.code}"
+                        link['working'] = False
+                        broken_links.append(link)
+                    except URLError as e:
+                        link['status'] = f"URL Error: {str(e.reason)}"
+                        link['working'] = False
+                        broken_links.append(link)
+                    except Exception as e:
+                        link['status'] = f"Error: {str(e)}"
+                        link['working'] = False
+                        broken_links.append(link)
+                    
+                    self.link_checked.emit(link)
+                
+                self.finished_checking.emit()
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"🔗 Link Scanner - {len(links)} links found")
+        dialog.setMinimumSize(800, 600)
+        dialog.resize(1000, 700)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"Scanning {len(links)} links from: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #f0f0f0; border-radius: 5px;")
+        layout.addWidget(header_label)
+        
+        # Progress bar
+        progress_bar = QProgressBar()
+        progress_bar.setMaximum(len(links))
+        progress_bar.setValue(0)
+        layout.addWidget(progress_bar)
+        
+        # Status label
+        status_label = QLabel("Starting scan...")
+        layout.addWidget(status_label)
+        
+        # Splitter for results
+        splitter = QSplitter(Qt.Horizontal)
+        layout.addWidget(splitter)
+        
+        # Broken links area
+        broken_widget = QWidget()
+        broken_layout = QVBoxLayout(broken_widget)
+        broken_layout.addWidget(QLabel("🚫 Broken Links:"))
+        broken_text = QTextEdit()
+        broken_text.setReadOnly(True)
+        broken_text.setStyleSheet("background-color: #ffe6e6; font-family: monospace;")
+        broken_layout.addWidget(broken_text)
+        splitter.addWidget(broken_widget)
+        
+        # Working links area
+        working_widget = QWidget()
+        working_layout = QVBoxLayout(working_widget)
+        working_layout.addWidget(QLabel("✅ Working Links:"))
+        working_text = QTextEdit()
+        working_text.setReadOnly(True)
+        working_text.setStyleSheet("background-color: #e6ffe6; font-family: monospace;")
+        working_layout.addWidget(working_text)
+        splitter.addWidget(working_widget)
+        
+        # Set equal sizes
+        splitter.setSizes([400, 400])
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        stop_button = QPushButton("⏹️ Stop Scan")
+        stop_button.setEnabled(True)
+        
+        close_button = QPushButton("❌ Close")
+        close_button.setEnabled(False)
+        
+        export_button = QPushButton("💾 Export Results")
+        export_button.setEnabled(False)
+        
+        button_layout.addWidget(stop_button)
+        button_layout.addStretch()
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(close_button)
+        layout.addWidget(QWidget())  # Spacer
+        layout.addLayout(button_layout)
+        
+        # Create and start checker thread
+        checker_thread = LinkCheckerThread(links, base_url)
+        
+        broken_count = 0
+        working_count = 0
+        
+        def on_progress_updated(current, total, status):
+            progress_bar.setValue(current)
+            status_label.setText(f"Progress: {current}/{total} - {status}")
+        
+        def on_link_checked(link):
+            nonlocal broken_count, working_count
+            
+            if link['working']:
+                working_count += 1
+                working_text.append(f"✅ {link['status']} - {link['text'][:50]}\n   {link['url']}\n")
+            else:
+                broken_count += 1
+                broken_text.append(f"🚫 {link['status']} - {link['text'][:50]}\n   {link['url']}\n")
+            
+            # Update header with counts
+            header_label.setText(f"Scanned {working_count + broken_count}/{len(links)} links - "
+                               f"✅ {working_count} working, 🚫 {broken_count} broken")
+        
+        def on_finished():
+            status_label.setText(f"✅ Scan complete! Found {broken_count} broken links out of {len(links)} total.")
+            stop_button.setEnabled(False)
+            close_button.setEnabled(True)
+            export_button.setEnabled(True)
+            
+            # Show summary in main window
+            if broken_count > 0:
+                self.main_window.status_info.setText(f"🔗 Scan complete: {broken_count} broken links found")
+            else:
+                self.main_window.status_info.setText(f"🔗 Scan complete: All {len(links)} links are working!")
+            QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+        
+        def stop_scan():
+            checker_thread.stop()
+            status_label.setText("⏹️ Scan stopped by user")
+            stop_button.setEnabled(False)
+            close_button.setEnabled(True)
+        
+        def export_results():
+            from PyQt5.QtWidgets import QFileDialog
+            from datetime import datetime
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"broken_links_scan_{timestamp}.txt"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export Link Scan Results",
+                filename,
+                "Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(f"Link Scan Results\n")
+                        f.write(f"Scanned URL: {base_url}\n")
+                        f.write(f"Scan Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write(f"Total Links: {len(links)}\n")
+                        f.write(f"Working Links: {working_count}\n")
+                        f.write(f"Broken Links: {broken_count}\n")
+                        f.write("="*80 + "\n\n")
+                        
+                        if broken_count > 0:
+                            f.write("BROKEN LINKS:\n")
+                            f.write("-" * 40 + "\n")
+                            f.write(broken_text.toPlainText())
+                            f.write("\n\n")
+                        
+                        f.write("WORKING LINKS:\n")
+                        f.write("-" * 40 + "\n")
+                        f.write(working_text.toPlainText())
+                    
+                    status_label.setText(f"✅ Results exported to: {file_path}")
+                except Exception as e:
+                    status_label.setText(f"❌ Export failed: {str(e)}")
+        
+        # Connect signals
+        checker_thread.progress_updated.connect(on_progress_updated)
+        checker_thread.link_checked.connect(on_link_checked)
+        checker_thread.finished_checking.connect(on_finished)
+        
+        stop_button.clicked.connect(stop_scan)
+        close_button.clicked.connect(dialog.accept)
+        export_button.clicked.connect(export_results)
+        
+        # Start the scan
+        checker_thread.start()
+        
+        # Show dialog
+        dialog.exec_()
+        
+        # Clean up
+        if checker_thread.isRunning():
+            checker_thread.stop()
+            checker_thread.wait()
     
     def apply_font_size(self, font_size):
         """Apply font size to all open tabs"""
