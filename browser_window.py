@@ -339,6 +339,56 @@ class MainWindow(QMainWindow):
 
     def setup_menus(self):
         """Setup application menus"""
+        # Mode menu (added to the left of Bookmarks)
+        mode_menu = self.menuBar().addMenu("&Mode")
+        
+        # Web Browser mode action
+        web_mode_action = QAction("🌐 Web Browser", self)
+        web_mode_action.setShortcut("Ctrl+1")
+        web_mode_action.setStatusTip("Switch to web browser mode")
+        web_mode_action.setCheckable(True)
+        web_mode_action.setChecked(True)  # Default mode
+        web_mode_action.triggered.connect(self.switch_to_web_mode)
+        mode_menu.addAction(web_mode_action)
+        
+        # API Tester mode action
+        api_mode_action = QAction("🔧 API Tester", self)
+        api_mode_action.setShortcut("Ctrl+2")
+        api_mode_action.setStatusTip("Switch to API testing mode")
+        api_mode_action.setCheckable(True)
+        api_mode_action.triggered.connect(self.switch_to_api_mode)
+        mode_menu.addAction(api_mode_action)
+        
+        # Command Line mode action
+        cmd_mode_action = QAction("💻 Command Line", self)
+        cmd_mode_action.setShortcut("Ctrl+3")
+        cmd_mode_action.setStatusTip("Switch to command line mode")
+        cmd_mode_action.setCheckable(True)
+        cmd_mode_action.triggered.connect(self.switch_to_cmd_mode)
+        mode_menu.addAction(cmd_mode_action)
+        
+        # PDF Reader mode action
+        pdf_mode_action = QAction("📄 PDF Reader", self)
+        pdf_mode_action.setShortcut("Ctrl+4")
+        pdf_mode_action.setStatusTip("Switch to PDF reader mode")
+        pdf_mode_action.setCheckable(True)
+        pdf_mode_action.triggered.connect(self.switch_to_pdf_mode)
+        mode_menu.addAction(pdf_mode_action)
+        
+        # Create action group for exclusive selection
+        self.mode_action_group = QActionGroup(self)
+        self.mode_action_group.addAction(web_mode_action)
+        self.mode_action_group.addAction(api_mode_action)
+        self.mode_action_group.addAction(cmd_mode_action)
+        self.mode_action_group.addAction(pdf_mode_action)
+        self.mode_action_group.setExclusive(True)
+        
+        # Store references to mode actions for later use
+        self.web_mode_action = web_mode_action
+        self.api_mode_action = api_mode_action
+        self.cmd_mode_action = cmd_mode_action
+        self.pdf_mode_action = pdf_mode_action
+        
         # Bookmarks menu
         self.bookmarks_menu = self.menuBar().addMenu("&Bookmarks")
         ui_helpers.update_bookmarks_menu(self)
@@ -674,9 +724,6 @@ class MainWindow(QMainWindow):
         ui_helpers.update_history_toggle_button(self)
         ui_helpers.update_bookmark_button(self)
         
-        # Update dropdown style
-        self.update_dropdown_style()
-        
         # Update profile label style
         self.status_profile.setStyleSheet(styles.get_profile_label_style())
         
@@ -789,25 +836,34 @@ class MainWindow(QMainWindow):
     
     def toggle_api_mode(self):
         """Toggle API testing mode (for backward compatibility)"""
-        current_index = self.mode_dropdown.currentIndex()
-        new_index = 1 if current_index == 0 else 0
-        self.mode_dropdown.setCurrentIndex(new_index)
+        if hasattr(self, 'web_mode_action') and self.web_mode_action.isChecked():
+            self.api_mode_action.setChecked(True)
+        else:
+            self.web_mode_action.setChecked(True)
     
     def switch_to_pdf_mode(self):
         """Switch to PDF reader mode"""
-        self.mode_dropdown.setCurrentIndex(3)  # PDF Reader is at index 3
+        if hasattr(self, 'pdf_mode_action'):
+            self.pdf_mode_action.setChecked(True)
+        self.on_mode_changed("📄 PDF Reader")
     
     def switch_to_api_mode(self):
         """Switch to API testing mode"""
-        self.mode_dropdown.setCurrentIndex(1)  # API Tester is at index 1
+        if hasattr(self, 'api_mode_action'):
+            self.api_mode_action.setChecked(True)
+        self.on_mode_changed("🔧 API Tester")
     
     def switch_to_cmd_mode(self):
         """Switch to command line mode"""
-        self.mode_dropdown.setCurrentIndex(2)  # Command Line is at index 2
+        if hasattr(self, 'cmd_mode_action'):
+            self.cmd_mode_action.setChecked(True)
+        self.on_mode_changed("💻 Command Line")
     
     def switch_to_web_mode(self):
         """Switch to web browser mode"""
-        self.mode_dropdown.setCurrentIndex(0)  # Web Browser is at index 0
+        if hasattr(self, 'web_mode_action'):
+            self.web_mode_action.setChecked(True)
+        self.on_mode_changed("🌐 Web Browser")
     
     def store_and_remove_web_tabs(self):
         """Store current web tabs and remove them from view"""

@@ -546,8 +546,8 @@ System Commands:
         
         elif cmd in ["exit", "quit"]:
             # Signal to parent to switch back to web mode
-            if hasattr(self.parent(), 'mode_dropdown'):
-                self.parent().mode_dropdown.setCurrentIndex(0)
+            if hasattr(self.parent(), 'switch_to_web_mode'):
+                self.parent().switch_to_web_mode()
             return True
         
         return False
