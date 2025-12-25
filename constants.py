@@ -57,3 +57,8 @@ PDF_FILE_FILTER = "Portable Document Format (*.pdf);;All files (*.*)"
 # PDF viewer settings
 PDF_ZOOM_LEVELS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]
 DEFAULT_PDF_ZOOM = 1.0
+
+# Sidebar settings
+SIDEBAR_FILE = "sidebar.json"
+SIDEBAR_WIDTH = 70
+MAX_SIDEBAR_ITEMS = 20

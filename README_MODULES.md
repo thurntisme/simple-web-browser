@@ -22,6 +22,15 @@ The application now supports multiple modes accessible via the mode dropdown in 
   - Arrow keys - Navigate pages
   - Home/End - Jump to first/last page
 
+### Vertical Sidebar Features
+- **Quick Access**: Square item buttons for frequently visited sites
+- **Toggle Visibility**: Show/hide sidebar with button or `Ctrl+B`
+- **Add Items**: Add new quick access items with custom title and URL
+- **Delete Items**: Remove items with confirmation dialog (hover to see delete button)
+- **Current Page**: Add current page to sidebar with `Ctrl+Shift+B`
+- **Tab Replacement**: Click sidebar items to replace current tab content
+- **Persistent Storage**: Sidebar items saved per profile
+
 ### Requirements for PDF Reader
 The PDF reader requires the PyMuPDF library:
 ```bash
@@ -83,9 +92,16 @@ pip install PyMuPDF
    - Zoom, navigation, and fit controls
    - Drag-and-drop support for PDF files
 
+8. **sidebar_widget.py** - Vertical sidebar with quick access
+   - SidebarWidget class for main sidebar container
+   - SidebarItem class for individual square items
+   - AddSidebarItemDialog for adding new items
+   - Persistent storage per profile
+   - Toggle visibility and item management
+
 ### Helper Modules
 
-8. **ui_helpers.py** - UI update helper functions
+9. **ui_helpers.py** - UI update helper functions
    - Menu update functions
    - Button state updates
    - Profile switching logic
@@ -100,11 +116,13 @@ storage/
     ├── default/
     │   ├── config.json    # Profile settings
     │   ├── history.json   # Browsing history
-    │   └── bookmarks.json # Bookmarks
+    │   ├── bookmarks.json # Bookmarks
+    │   └── sidebar.json   # Sidebar quick access items
     └── work/
         ├── config.json
         ├── history.json
-        └── bookmarks.json
+        ├── bookmarks.json
+        └── sidebar.json
 ```
 
 ## Usage in main.py

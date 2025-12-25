@@ -27,6 +27,7 @@ from dialogs import AboutDialog, BrowserSettingsDialog
 from tab_manager import TabManager
 from navigation import NavigationManager
 from pdf_viewer import PDFViewerWidget
+from sidebar_widget import SidebarWidget
 
 
 class MainWindow(QMainWindow):
@@ -51,6 +52,10 @@ class MainWindow(QMainWindow):
         self.pdf_tab_widget = None
         self.pdf_tab_index = None
         self.stored_web_tabs = []  # Store web tabs when in special modes
+        
+        # Sidebar state
+        self.sidebar_visible = True
+        self.sidebar_widget = None
         
         self.history_manager = HistoryManager(self.profile_manager)
         self.history_manager.enabled = self.config_manager.get("history_enabled", False)
@@ -87,13 +92,97 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(os.path.join(IMAGES_DIR, ICON_APP_64)))
 
     def setup_tabs(self):
-        """Setup tab widget"""
+        """Setup tab widget with sidebar"""
+        # Create main horizontal layout
+        main_widget = QWidget()
+        main_layout = QHBoxLayout(main_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Create sidebar
+        self.sidebar_widget = SidebarWidget(self)
+        main_layout.addWidget(self.sidebar_widget)
+        
+        # Create container for tabs and sidebar toggle
+        tabs_container = QWidget()
+        tabs_container_layout = QVBoxLayout(tabs_container)
+        tabs_container_layout.setContentsMargins(0, 0, 0, 0)
+        tabs_container_layout.setSpacing(0)
+        
+        # Create top bar with sidebar toggle button
+        top_bar = QWidget()
+        top_bar.setFixedHeight(32)
+        top_bar.setStyleSheet("""
+            QWidget {
+                background-color: #f8f9fa;
+                border-bottom: 1px solid #dee2e6;
+            }
+        """)
+        top_bar_layout = QHBoxLayout(top_bar)
+        top_bar_layout.setContentsMargins(8, 4, 8, 4)
+        top_bar_layout.setSpacing(8)
+        
+        # Sidebar toggle button
+        self.sidebar_toggle_btn = QPushButton("📋")
+        self.sidebar_toggle_btn.setObjectName("sidebarToggleBtn")
+        self.sidebar_toggle_btn.setFixedSize(24, 24)
+        self.sidebar_toggle_btn.setStatusTip("Toggle sidebar")
+        self.sidebar_toggle_btn.setCheckable(True)
+        self.sidebar_toggle_btn.setChecked(True)
+        self.sidebar_toggle_btn.clicked.connect(self.toggle_sidebar)
+        self.sidebar_toggle_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                font-size: 11px;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: #e9ecef;
+                border-color: #adb5bd;
+            }
+            QPushButton:checked {
+                background-color: #007bff;
+                color: white;
+                border-color: #0056b3;
+            }
+            QPushButton:checked:hover {
+                background-color: #0056b3;
+            }
+        """)
+        top_bar_layout.addWidget(self.sidebar_toggle_btn)
+        
+        # Add title label
+        self.title_label = QLabel("Browser Tabs")
+        self.title_label.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                font-weight: 600;
+                color: #495057;
+                padding-left: 4px;
+            }
+        """)
+        top_bar_layout.addWidget(self.title_label)
+        
+        # Add stretch to push everything to the left
+        top_bar_layout.addStretch()
+        
+        # Add top bar to container
+        tabs_container_layout.addWidget(top_bar)
+        
+        # Create tabs
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.tabs.tabBarDoubleClicked.connect(self.tab_open_doubleclick)
         self.tabs.currentChanged.connect(self.current_tab_changed)
         self.tabs.setTabsClosable(False)
-        self.setCentralWidget(self.tabs)
+        tabs_container_layout.addWidget(self.tabs)
+        
+        # Add tabs container to main layout
+        main_layout.addWidget(tabs_container)
+        
+        self.setCentralWidget(main_widget)
 
     def setup_status_bar(self):
         """Setup status bar with widgets"""
@@ -251,6 +340,21 @@ class MainWindow(QMainWindow):
         web_mode_action.setStatusTip("Switch to web browser mode")
         web_mode_action.triggered.connect(self.switch_to_web_mode)
         tools_menu.addAction(web_mode_action)
+        
+        tools_menu.addSeparator()
+        
+        # Sidebar actions
+        sidebar_toggle_action = QAction("📋 Toggle Sidebar", self)
+        sidebar_toggle_action.setShortcut("Ctrl+B")
+        sidebar_toggle_action.setStatusTip("Show/Hide sidebar")
+        sidebar_toggle_action.triggered.connect(self.toggle_sidebar)
+        tools_menu.addAction(sidebar_toggle_action)
+        
+        add_to_sidebar_action = QAction("➕ Add Current Page to Sidebar", self)
+        add_to_sidebar_action.setShortcut("Ctrl+Shift+B")
+        add_to_sidebar_action.setStatusTip("Add current page to sidebar")
+        add_to_sidebar_action.triggered.connect(self.add_current_to_sidebar)
+        tools_menu.addAction(add_to_sidebar_action)
 
         # Profile menu
         self.profile_menu = self.menuBar().addMenu("👤 &Profile")
@@ -478,6 +582,15 @@ class MainWindow(QMainWindow):
             # Hide navigation toolbar (home, reload, URL bar)
             self.navigation_toolbar.setVisible(False)
             
+            # Hide sidebar in non-web modes
+            if self.sidebar_widget:
+                self.sidebar_widget.setVisible(False)
+            
+            # Disable sidebar toggle button in non-web modes
+            if hasattr(self, 'sidebar_toggle_btn'):
+                self.sidebar_toggle_btn.setEnabled(False)
+                self.sidebar_toggle_btn.setToolTip("Sidebar only available in Web Browser mode")
+            
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
             
@@ -496,6 +609,15 @@ class MainWindow(QMainWindow):
             
             # Hide navigation toolbar
             self.navigation_toolbar.setVisible(False)
+            
+            # Hide sidebar in non-web modes
+            if self.sidebar_widget:
+                self.sidebar_widget.setVisible(False)
+            
+            # Disable sidebar toggle button in non-web modes
+            if hasattr(self, 'sidebar_toggle_btn'):
+                self.sidebar_toggle_btn.setEnabled(False)
+                self.sidebar_toggle_btn.setToolTip("Sidebar only available in Web Browser mode")
             
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
@@ -516,6 +638,15 @@ class MainWindow(QMainWindow):
             # Hide navigation toolbar
             self.navigation_toolbar.setVisible(False)
             
+            # Hide sidebar in non-web modes
+            if self.sidebar_widget:
+                self.sidebar_widget.setVisible(False)
+            
+            # Disable sidebar toggle button in non-web modes
+            if hasattr(self, 'sidebar_toggle_btn'):
+                self.sidebar_toggle_btn.setEnabled(False)
+                self.sidebar_toggle_btn.setToolTip("Sidebar only available in Web Browser mode")
+            
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
             
@@ -534,6 +665,15 @@ class MainWindow(QMainWindow):
             
             # Show navigation toolbar
             self.navigation_toolbar.setVisible(True)
+            
+            # Show sidebar only in web mode
+            if self.sidebar_widget:
+                self.sidebar_widget.setVisible(self.sidebar_visible)
+            
+            # Enable sidebar toggle button in web mode
+            if hasattr(self, 'sidebar_toggle_btn'):
+                self.sidebar_toggle_btn.setEnabled(True)
+                self.sidebar_toggle_btn.setToolTip("Toggle sidebar")
             
             # Remove special mode tabs and restore web tabs
             self.remove_api_tabs()
@@ -986,3 +1126,64 @@ class MainWindow(QMainWindow):
         
         # Show window maximized after everything is set up
         self.showMaximized()
+    
+    def toggle_sidebar(self):
+        """Toggle sidebar visibility (only works in web mode)"""
+        # Only allow sidebar toggle in web mode
+        if self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled:
+            self.status_info.setText("Sidebar only available in Web Browser mode")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+            return
+        
+        self.sidebar_visible = not self.sidebar_visible
+        
+        if self.sidebar_widget:
+            self.sidebar_widget.setVisible(self.sidebar_visible)
+            
+        # Update button state
+        self.sidebar_toggle_btn.setChecked(self.sidebar_visible)
+        
+        # Update title label to reflect sidebar state
+        if hasattr(self, 'title_label'):
+            if self.sidebar_visible:
+                self.title_label.setText("Browser Tabs")
+            else:
+                self.title_label.setText("Browser Tabs (Sidebar Hidden)")
+        
+        # Update status
+        status = "shown" if self.sidebar_visible else "hidden"
+        self.status_info.setText(f"Sidebar {status}")
+        
+        # Reset status after 2 seconds
+        QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+    
+    def add_current_to_sidebar(self):
+        """Add current page to sidebar (only works in web mode)"""
+        # Only allow adding to sidebar in web mode
+        if self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled:
+            self.status_info.setText("Sidebar only available in Web Browser mode")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+            return
+        
+        if self.sidebar_widget and self.sidebar_widget.add_current_page():
+            self.status_info.setText("Added to sidebar")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+        else:
+            self.status_info.setText("Failed to add to sidebar")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+    
+    def replace_current_tab(self, url, title):
+        """Replace current tab content with new URL"""
+        current_browser = self.get_current_browser()
+        if current_browser:
+            # Navigate to new URL
+            current_browser.setUrl(QUrl(url))
+            
+            # Update tab title
+            current_index = self.tabs.currentIndex()
+            if current_index >= 0:
+                self.tabs.setTabText(current_index, title[:20] + "..." if len(title) > 20 else title)
+            
+            # Show status
+            self.status_info.setText(f"Loading: {title}")
+            QTimer.singleShot(3000, lambda: self.status_info.setText(""))
