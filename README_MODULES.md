@@ -2,6 +2,32 @@
 
 The browser code has been refactored into separate modules for better organization and maintainability.
 
+## Features
+
+### Browser Modes
+The application now supports multiple modes accessible via the mode dropdown in the top-right corner:
+
+1. **🌐 Web Browser Mode** (Default) - Standard web browsing with navigation toolbar
+2. **🔧 API Tester Mode** - API testing interface (placeholder for future implementation)
+3. **💻 Command Line Mode** - Integrated terminal for command execution
+4. **📄 PDF Reader Mode** - Built-in PDF document viewer
+
+### PDF Reader Features
+- **File Support**: Open PDF files via file dialog or drag-and-drop
+- **Navigation**: Previous/Next page buttons, keyboard shortcuts (Arrow keys, Page Up/Down, Home/End)
+- **Zoom Controls**: 25% to 400% zoom levels with preset options
+- **Fit Options**: Fit to width or fit entire page to window
+- **Keyboard Shortcuts**: 
+  - `Ctrl+Shift+P` - Switch to PDF mode
+  - Arrow keys - Navigate pages
+  - Home/End - Jump to first/last page
+
+### Requirements for PDF Reader
+The PDF reader requires the PyMuPDF library:
+```bash
+pip install PyMuPDF
+```
+
 ## Code Reduction
 
 - **Original main.py**: 661 lines
@@ -49,9 +75,17 @@ The browser code has been refactored into separate modules for better organizati
    - Load and save profile-specific settings
    - Get/set configuration values
 
+### UI Modules
+
+7. **pdf_viewer.py** - PDF document viewer
+   - PDFViewerWidget class
+   - PDF rendering with PyMuPDF
+   - Zoom, navigation, and fit controls
+   - Drag-and-drop support for PDF files
+
 ### Helper Modules
 
-7. **ui_helpers.py** - UI update helper functions
+8. **ui_helpers.py** - UI update helper functions
    - Menu update functions
    - Button state updates
    - Profile switching logic

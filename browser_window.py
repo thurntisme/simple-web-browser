@@ -26,6 +26,7 @@ import styles
 from dialogs import AboutDialog, BrowserSettingsDialog
 from tab_manager import TabManager
 from navigation import NavigationManager
+from pdf_viewer import PDFViewerWidget
 
 
 class MainWindow(QMainWindow):
@@ -46,6 +47,9 @@ class MainWindow(QMainWindow):
         self.cmd_mode_enabled = False
         self.cmd_tab_widget = None
         self.cmd_tab_index = None
+        self.pdf_mode_enabled = False
+        self.pdf_tab_widget = None
+        self.pdf_tab_index = None
         self.stored_web_tabs = []  # Store web tabs when in special modes
         
         self.history_manager = HistoryManager(self.profile_manager)
@@ -220,6 +224,33 @@ class MainWindow(QMainWindow):
         curl_action.setStatusTip("Make HTTP requests and test APIs")
         curl_action.triggered.connect(self.show_curl_tool)
         tools_menu.addAction(curl_action)
+        
+        tools_menu.addSeparator()
+        
+        # Mode switching actions
+        pdf_mode_action = QAction("📄 PDF Reader Mode", self)
+        pdf_mode_action.setShortcut("Ctrl+Shift+P")
+        pdf_mode_action.setStatusTip("Switch to PDF reader mode")
+        pdf_mode_action.triggered.connect(self.switch_to_pdf_mode)
+        tools_menu.addAction(pdf_mode_action)
+        
+        api_mode_action = QAction("🔧 API Tester Mode", self)
+        api_mode_action.setShortcut("Ctrl+Shift+A")
+        api_mode_action.setStatusTip("Switch to API testing mode")
+        api_mode_action.triggered.connect(self.switch_to_api_mode)
+        tools_menu.addAction(api_mode_action)
+        
+        cmd_mode_action = QAction("💻 Command Line Mode", self)
+        cmd_mode_action.setShortcut("Ctrl+Shift+C")
+        cmd_mode_action.setStatusTip("Switch to command line mode")
+        cmd_mode_action.triggered.connect(self.switch_to_cmd_mode)
+        tools_menu.addAction(cmd_mode_action)
+        
+        web_mode_action = QAction("🌐 Web Browser Mode", self)
+        web_mode_action.setShortcut("Ctrl+Shift+W")
+        web_mode_action.setStatusTip("Switch to web browser mode")
+        web_mode_action.triggered.connect(self.switch_to_web_mode)
+        tools_menu.addAction(web_mode_action)
 
         # Profile menu
         self.profile_menu = self.menuBar().addMenu("👤 &Profile")
@@ -272,6 +303,7 @@ class MainWindow(QMainWindow):
         self.mode_dropdown.addItem("🌐 Web Browser", "web")
         self.mode_dropdown.addItem("🔧 API Tester", "api")
         self.mode_dropdown.addItem("💻 Command Line", "cmd")
+        self.mode_dropdown.addItem("📄 PDF Reader", "pdf")
         self.mode_dropdown.setCurrentIndex(0)  # Default to web mode
         self.mode_dropdown.setMinimumWidth(140)  # Increased width for new option
         self.update_dropdown_style()
@@ -440,6 +472,7 @@ class MainWindow(QMainWindow):
             # Switch to API mode
             self.api_mode_enabled = True
             self.cmd_mode_enabled = False
+            self.pdf_mode_enabled = False
             self.status_info.setText("API Mode: Ready for testing")
             
             # Hide navigation toolbar (home, reload, URL bar)
@@ -448,8 +481,9 @@ class MainWindow(QMainWindow):
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
             
-            # Remove command line tab if exists
+            # Remove other mode tabs
             self.remove_cmd_tabs()
+            self.remove_pdf_tabs()
             
             # Add API tab
             self.add_api_tab()
@@ -457,6 +491,7 @@ class MainWindow(QMainWindow):
             # Switch to command line mode
             self.cmd_mode_enabled = True
             self.api_mode_enabled = False
+            self.pdf_mode_enabled = False
             self.status_info.setText("Command Line Mode: Ready for terminal commands")
             
             # Hide navigation toolbar
@@ -465,15 +500,36 @@ class MainWindow(QMainWindow):
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
             
-            # Remove API tab if exists
+            # Remove other mode tabs
             self.remove_api_tabs()
+            self.remove_pdf_tabs()
             
             # Add command line tab
             self.add_cmd_tab()
+        elif "PDF Reader" in mode_text:
+            # Switch to PDF reader mode
+            self.pdf_mode_enabled = True
+            self.api_mode_enabled = False
+            self.cmd_mode_enabled = False
+            self.status_info.setText("PDF Mode: Ready for document viewing")
+            
+            # Hide navigation toolbar
+            self.navigation_toolbar.setVisible(False)
+            
+            # Store current web tabs and remove them
+            self.store_and_remove_web_tabs()
+            
+            # Remove other mode tabs
+            self.remove_api_tabs()
+            self.remove_cmd_tabs()
+            
+            # Add PDF reader tab
+            self.add_pdf_tab()
         else:
             # Switch to web mode
             self.api_mode_enabled = False
             self.cmd_mode_enabled = False
+            self.pdf_mode_enabled = False
             self.status_info.setText("Web Mode: Ready for browsing")
             
             # Show navigation toolbar
@@ -482,6 +538,7 @@ class MainWindow(QMainWindow):
             # Remove special mode tabs and restore web tabs
             self.remove_api_tabs()
             self.remove_cmd_tabs()
+            self.remove_pdf_tabs()
             self.restore_web_tabs()
     
     def toggle_api_mode(self):
@@ -490,17 +547,35 @@ class MainWindow(QMainWindow):
         new_index = 1 if current_index == 0 else 0
         self.mode_dropdown.setCurrentIndex(new_index)
     
+    def switch_to_pdf_mode(self):
+        """Switch to PDF reader mode"""
+        self.mode_dropdown.setCurrentIndex(3)  # PDF Reader is at index 3
+    
+    def switch_to_api_mode(self):
+        """Switch to API testing mode"""
+        self.mode_dropdown.setCurrentIndex(1)  # API Tester is at index 1
+    
+    def switch_to_cmd_mode(self):
+        """Switch to command line mode"""
+        self.mode_dropdown.setCurrentIndex(2)  # Command Line is at index 2
+    
+    def switch_to_web_mode(self):
+        """Switch to web browser mode"""
+        self.mode_dropdown.setCurrentIndex(0)  # Web Browser is at index 0
+    
     def store_and_remove_web_tabs(self):
         """Store current web tabs and remove them from view"""
         self.stored_web_tabs = []
         
-        # Store all current tabs (except API tabs)
+        # Store all current tabs (except special mode tabs)
         for i in range(self.tabs.count()):
             widget = self.tabs.widget(i)
             tab_text = self.tabs.tabText(i)
             
-            # Skip if it's already an API tab
-            if hasattr(self, 'api_tab_widget') and widget == self.api_tab_widget:
+            # Skip if it's already a special mode tab
+            if (hasattr(self, 'api_tab_widget') and widget == self.api_tab_widget) or \
+               (hasattr(self, 'cmd_tab_widget') and widget == self.cmd_tab_widget) or \
+               (hasattr(self, 'pdf_tab_widget') and widget == self.pdf_tab_widget):
                 continue
                 
             # Store tab info
@@ -514,7 +589,9 @@ class MainWindow(QMainWindow):
         # Remove all tabs (they'll be restored later)
         while self.tabs.count() > 0:
             widget = self.tabs.widget(0)
-            if hasattr(self, 'api_tab_widget') and widget == self.api_tab_widget:
+            if (hasattr(self, 'api_tab_widget') and widget == self.api_tab_widget) or \
+               (hasattr(self, 'cmd_tab_widget') and widget == self.cmd_tab_widget) or \
+               (hasattr(self, 'pdf_tab_widget') and widget == self.pdf_tab_widget):
                 break
             self.tabs.removeTab(0)
     
@@ -591,6 +668,25 @@ class MainWindow(QMainWindow):
                 self.cmd_tab_widget.closeEvent(None)  # Clean up any running processes
             self.cmd_tab_widget = None
             self.cmd_tab_index = None
+    
+    def add_pdf_tab(self):
+        """Add a new PDF reader tab"""
+        # Create PDF viewer widget
+        self.pdf_tab_widget = PDFViewerWidget(self)
+        
+        # Add the PDF tab
+        tab_index = self.tabs.addTab(self.pdf_tab_widget, "📄 PDF Reader")
+        self.tabs.setCurrentIndex(tab_index)
+        
+        # Store reference to PDF tab
+        self.pdf_tab_index = tab_index
+    
+    def remove_pdf_tabs(self):
+        """Remove PDF reader tabs"""
+        if hasattr(self, 'pdf_tab_index') and self.pdf_tab_index is not None:
+            self.tabs.removeTab(self.pdf_tab_index)
+            self.pdf_tab_widget = None
+            self.pdf_tab_index = None
     
     def show_clipboard_manager(self):
         """Show clipboard manager dialog"""
