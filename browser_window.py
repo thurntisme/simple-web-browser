@@ -28,6 +28,7 @@ from tab_manager import TabManager
 from navigation import NavigationManager
 from pdf_viewer import PDFViewerWidget
 from sidebar_widget import SidebarWidget
+from water_reminder import WaterReminderManager, WaterReminderWidget
 
 
 class MainWindow(QMainWindow):
@@ -83,6 +84,12 @@ class MainWindow(QMainWindow):
         # Initialize managers that depend on UI
         self.tab_manager = TabManager(self)
         self.navigation_manager = NavigationManager(self)
+        
+        # Initialize water reminder system
+        self.water_reminder = WaterReminderManager(self.profile_manager, self)
+        
+        # Add water reminder widget to status bar
+        self.setup_water_reminder_widget()
         
         # Connect clipboard manager signals
         self.clipboard_manager.clipboard_changed.connect(self.on_clipboard_changed)
@@ -259,6 +266,12 @@ class MainWindow(QMainWindow):
         self.current_zoom = 1.0  # 100%
         self.zoom_levels = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0]
         self.current_zoom_index = self.zoom_levels.index(1.0)  # Start at 100%
+    
+    def setup_water_reminder_widget(self):
+        """Setup water reminder widget in the status bar"""
+        if hasattr(self, 'water_reminder'):
+            self.water_widget = WaterReminderWidget(self.water_reminder, self)
+            self.status.addPermanentWidget(self.water_widget)
 
     def setup_toolbar(self):
         """Setup navigation toolbar with icons"""
@@ -373,6 +386,15 @@ class MainWindow(QMainWindow):
         curl_action.setStatusTip("Make HTTP requests and test APIs")
         curl_action.triggered.connect(self.show_curl_tool)
         tools_menu.addAction(curl_action)
+        
+        tools_menu.addSeparator()
+        
+        # Water Reminder action
+        water_action = QAction("💧 Water Reminder", self)
+        water_action.setShortcut("Ctrl+W")
+        water_action.setStatusTip("Manage water intake reminders")
+        water_action.triggered.connect(self.show_water_reminder)
+        tools_menu.addAction(water_action)
         
         # Screenshot submenu
         screenshot_menu = tools_menu.addMenu("📸 Screenshot")
@@ -939,6 +961,12 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.curl_dialog.raise_()
             self.curl_dialog.activateWindow()
+    
+    def show_water_reminder(self):
+        """Show water reminder dialog"""
+        from water_reminder import WaterReminderDialog
+        dialog = WaterReminderDialog(self.water_reminder, self)
+        dialog.exec_()
     
     def take_screenshot(self, screenshot_type="viewport"):
         """Take a screenshot of the current page (only works in web mode)"""
