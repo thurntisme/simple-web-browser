@@ -113,22 +113,22 @@ class MainWindow(QMainWindow):
 
     def setup_toolbar(self):
         """Setup navigation toolbar with icons"""
-        navtb = QToolBar("Navigation")
-        self.addToolBar(navtb)
+        self.navigation_toolbar = QToolBar("Navigation")
+        self.addToolBar(self.navigation_toolbar)
 
         # Home button with emoji icon
         home_btn = QAction("🏠 Home", self)
         home_btn.setStatusTip("Go home")
         home_btn.triggered.connect(self.navigate_home)
-        navtb.addAction(home_btn)
+        self.navigation_toolbar.addAction(home_btn)
 
         # Reload button with emoji icon
         reload_btn = QAction("🔄 Reload", self)
         reload_btn.setStatusTip("Reload page")
         reload_btn.triggered.connect(self.reload_page)
-        navtb.addAction(reload_btn)
+        self.navigation_toolbar.addAction(reload_btn)
 
-        navtb.addSeparator()
+        self.navigation_toolbar.addSeparator()
 
         # URL bar
         self.urlbar = QLineEdit()
@@ -136,14 +136,14 @@ class MainWindow(QMainWindow):
         self.urlbar.returnPressed.connect(self.navigate_to_url)
         self.urlbar.setContextMenuPolicy(Qt.CustomContextMenu)
         self.urlbar.customContextMenuRequested.connect(self.show_urlbar_context_menu)
-        navtb.addWidget(self.urlbar)
+        self.navigation_toolbar.addWidget(self.urlbar)
         
         # Open with browser dropdown button
         self.open_with_btn = QPushButton("🌐")
         self.open_with_btn.setObjectName("openWithBtn")
         self.open_with_btn.setMaximumWidth(35)
         self.open_with_btn.setStatusTip("Open in external browser")
-        navtb.addWidget(self.open_with_btn)
+        self.navigation_toolbar.addWidget(self.open_with_btn)
         
         # Bookmark button
         self.bookmark_btn = QPushButton("☆")
@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
         self.bookmark_btn.setMaximumWidth(30)
         self.bookmark_btn.setStatusTip("Add/Remove bookmark")
         self.bookmark_btn.clicked.connect(lambda: ui_helpers.toggle_bookmark(self))
-        navtb.addWidget(self.bookmark_btn)
+        self.navigation_toolbar.addWidget(self.bookmark_btn)
         
         # History toggle button
         self.history_toggle_btn = QPushButton()
@@ -164,7 +164,7 @@ class MainWindow(QMainWindow):
         self.history_toggle_btn.setStyleSheet(styles.get_history_button_style(self.history_manager.enabled))
         ui_helpers.update_history_toggle_button(self)
         self.history_toggle_btn.clicked.connect(lambda: ui_helpers.toggle_history(self))
-        navtb.addWidget(self.history_toggle_btn)
+        self.navigation_toolbar.addWidget(self.history_toggle_btn)
 
     def setup_menus(self):
         """Setup application menus with icons"""
@@ -436,6 +436,9 @@ class MainWindow(QMainWindow):
             self.api_mode_enabled = True
             self.status_info.setText("API Mode: Ready for testing")
             
+            # Hide navigation toolbar (home, reload, URL bar)
+            self.navigation_toolbar.setVisible(False)
+            
             # Store current web tabs and remove them
             self.store_and_remove_web_tabs()
             
@@ -445,6 +448,9 @@ class MainWindow(QMainWindow):
             # Switch to web mode
             self.api_mode_enabled = False
             self.status_info.setText("Web Mode: Ready for browsing")
+            
+            # Show navigation toolbar
+            self.navigation_toolbar.setVisible(True)
             
             # Remove API tab and restore web tabs
             self.remove_api_tabs()
