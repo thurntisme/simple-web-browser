@@ -159,20 +159,6 @@ class MainWindow(QMainWindow):
         ui_helpers.update_history_toggle_button(self)
         self.history_toggle_btn.clicked.connect(lambda: ui_helpers.toggle_history(self))
         navtb.addWidget(self.history_toggle_btn)
-        
-        navtb.addSeparator()
-        
-        # API Mode toggle button
-        self.api_mode_btn = QPushButton("🔧 API")
-        self.api_mode_btn.setMaximumWidth(80)
-        self.api_mode_btn.setMinimumHeight(32)
-        self.api_mode_btn.setMaximumHeight(32)
-        self.api_mode_btn.setCheckable(True)
-        self.api_mode_btn.setChecked(False)
-        self.api_mode_btn.setStatusTip("Toggle API testing mode")
-        self.api_mode_btn.setStyleSheet(styles.get_api_mode_button_style(False))
-        self.api_mode_btn.clicked.connect(self.toggle_api_mode)
-        navtb.addWidget(self.api_mode_btn)
 
     def setup_menus(self):
         """Setup application menus with icons"""
@@ -241,6 +227,131 @@ class MainWindow(QMainWindow):
         quit_action.setStatusTip("Exit the application")
         quit_action.triggered.connect(self.quit_application)
         help_menu.addAction(quit_action)
+        
+        # Add browser mode dropdown to the right side of menu bar
+        self.setup_browser_mode_dropdown()
+    
+    def setup_browser_mode_dropdown(self):
+        """Setup browser mode dropdown in menu bar"""
+        # Create a widget to hold the dropdown
+        mode_widget = QWidget()
+        mode_layout = QHBoxLayout(mode_widget)
+        mode_layout.setContentsMargins(10, 0, 10, 0)
+        
+        # Mode label
+        mode_label = QLabel("Mode:")
+        mode_label.setStyleSheet("QLabel { color: #666; font-weight: bold; }")
+        mode_layout.addWidget(mode_label)
+        
+        # Mode dropdown
+        self.mode_dropdown = QComboBox()
+        self.mode_dropdown.addItem("🌐 Web Browser", "web")
+        self.mode_dropdown.addItem("🔧 API Tester", "api")
+        self.mode_dropdown.setCurrentIndex(0)  # Default to web mode
+        self.mode_dropdown.setMinimumWidth(120)
+        self.update_dropdown_style()
+        self.mode_dropdown.currentTextChanged.connect(self.on_mode_changed)
+        mode_layout.addWidget(self.mode_dropdown)
+        
+        # Add the widget to the right side of the menu bar
+        self.menuBar().setCornerWidget(mode_widget, Qt.TopRightCorner)
+    
+    def update_dropdown_style(self):
+        """Update dropdown styling based on current theme"""
+        if hasattr(styles, 'current_theme') and styles.current_theme == "dark":
+            # Dark theme styling
+            self.mode_dropdown.setStyleSheet("""
+                QComboBox {
+                    padding: 4px 8px;
+                    border: 1px solid #555;
+                    border-radius: 4px;
+                    background-color: #2c3e50;
+                    color: #ecf0f1;
+                    font-weight: bold;
+                }
+                QComboBox:hover {
+                    border: 1px solid #7f8c8d;
+                    background-color: #34495e;
+                }
+                QComboBox::drop-down {
+                    border: none;
+                    width: 20px;
+                }
+                QComboBox::down-arrow {
+                    image: none;
+                    border-left: 4px solid transparent;
+                    border-right: 4px solid transparent;
+                    border-top: 4px solid #bdc3c7;
+                    margin-right: 4px;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: #2c3e50;
+                    color: #ecf0f1;
+                    border: 1px solid #555;
+                    selection-background-color: #34495e;
+                    selection-color: #ecf0f1;
+                    outline: none;
+                }
+                QComboBox QAbstractItemView::item {
+                    padding: 4px 8px;
+                    color: #ecf0f1;
+                }
+                QComboBox QAbstractItemView::item:hover {
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                }
+                QComboBox QAbstractItemView::item:selected {
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                }
+            """)
+        else:
+            # Light theme styling
+            self.mode_dropdown.setStyleSheet("""
+                QComboBox {
+                    padding: 4px 8px;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                    background-color: white;
+                    color: #333;
+                    font-weight: bold;
+                }
+                QComboBox:hover {
+                    border: 1px solid #999;
+                    background-color: #f8f9fa;
+                }
+                QComboBox::drop-down {
+                    border: none;
+                    width: 20px;
+                }
+                QComboBox::down-arrow {
+                    image: none;
+                    border-left: 4px solid transparent;
+                    border-right: 4px solid transparent;
+                    border-top: 4px solid #666;
+                    margin-right: 4px;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: white;
+                    color: #333;
+                    border: 1px solid #ccc;
+                    selection-background-color: #e3f2fd;
+                    selection-color: #333;
+                    outline: none;
+                }
+                QComboBox QAbstractItemView::item {
+                    padding: 4px 8px;
+                    color: #333;
+                }
+                QComboBox QAbstractItemView::item:hover {
+                    background-color: #e3f2fd;
+                    color: #333;
+                }
+                QComboBox QAbstractItemView::item:selected {
+                    background-color: #e3f2fd;
+                    color: #333;
+                }
+            """)
 
     def load_initial_page(self):
         """Load home page (welcome or custom URL)"""
@@ -288,8 +399,8 @@ class MainWindow(QMainWindow):
         ui_helpers.update_history_toggle_button(self)
         ui_helpers.update_bookmark_button(self)
         
-        # Update API mode button style
-        self.api_mode_btn.setStyleSheet(styles.get_api_mode_button_style(self.api_mode_enabled))
+        # Update dropdown style
+        self.update_dropdown_style()
         
         # Update profile label style
         self.status_profile.setStyleSheet(styles.get_profile_label_style())
@@ -298,17 +409,11 @@ class MainWindow(QMainWindow):
         theme_name = "Light" if new_theme == "light" else "Dark"
         self.status_info.setText(f"Switched to {theme_name} theme")
     
-    def toggle_api_mode(self):
-        """Toggle API testing mode"""
-        self.api_mode_enabled = self.api_mode_btn.isChecked()
-        
-        # Update button styling
-        self.api_mode_btn.setStyleSheet(styles.get_api_mode_button_style(self.api_mode_enabled))
-        
-        if self.api_mode_enabled:
+    def on_mode_changed(self, mode_text):
+        """Handle browser mode change from dropdown"""
+        if "API Tester" in mode_text:
             # Switch to API mode
-            self.api_mode_btn.setText("🌐 Web")
-            self.api_mode_btn.setStatusTip("Switch back to web browsing mode")
+            self.api_mode_enabled = True
             self.status_info.setText("API Mode: Ready for testing")
             
             # Store current web tabs and remove them
@@ -317,14 +422,19 @@ class MainWindow(QMainWindow):
             # Add API tab
             self.add_api_tab()
         else:
-            # Switch back to web mode
-            self.api_mode_btn.setText("🔧 API")
-            self.api_mode_btn.setStatusTip("Toggle API testing mode")
+            # Switch to web mode
+            self.api_mode_enabled = False
             self.status_info.setText("Web Mode: Ready for browsing")
             
             # Remove API tab and restore web tabs
             self.remove_api_tabs()
             self.restore_web_tabs()
+    
+    def toggle_api_mode(self):
+        """Toggle API testing mode (for backward compatibility)"""
+        current_index = self.mode_dropdown.currentIndex()
+        new_index = 1 if current_index == 0 else 0
+        self.mode_dropdown.setCurrentIndex(new_index)
     
     def store_and_remove_web_tabs(self):
         """Store current web tabs and remove them from view"""
