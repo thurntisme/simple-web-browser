@@ -433,6 +433,11 @@ class TabManager:
                 seo_analyzer_action = QAction("🔍 SEO Analyzer", self.main_window)
                 seo_analyzer_action.triggered.connect(lambda: self.analyze_seo(browser))
                 menu.addAction(seo_analyzer_action)
+                
+                # Add Font Detector feature
+                font_detector_action = QAction("🔤 Font Detector", self.main_window)
+                font_detector_action.triggered.connect(lambda: self.detect_fonts(browser))
+                menu.addAction(font_detector_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -6851,6 +6856,1020 @@ class TabManager:
         # Links
         links = seo_data.get('links', {})
         lines.append(f"LINKS: {len(links.get('internal', []))} internal, {len(links.get('external', []))} external")
+        lines.append("")
+        
+        return '\n'.join(lines)
+    
+    def detect_fonts(self, browser):
+        """Detect and analyze fonts used on the current website"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🔤 Detecting fonts...")
+            
+            # JavaScript to extract font information from the page
+            js_code = """
+            (function() {
+                var fontData = {
+                    elements: [],
+                    uniqueFonts: new Set(),
+                    fontFaces: [],
+                    webFonts: [],
+                    systemFonts: [],
+                    fontSizes: new Set(),
+                    fontWeights: new Set(),
+                    fontStyles: new Set()
+                };
+                
+                // Get all elements with text content
+                var allElements = document.querySelectorAll('*');
+                var textElements = [];
+                
+                for (var i = 0; i < allElements.length; i++) {
+                    var element = allElements[i];
+                    var hasDirectText = false;
+                    
+                    // Check if element has direct text content (not just from children)
+                    for (var j = 0; j < element.childNodes.length; j++) {
+                        if (element.childNodes[j].nodeType === Node.TEXT_NODE && 
+                            element.childNodes[j].textContent.trim().length > 0) {
+                            hasDirectText = true;
+                            break;
+                        }
+                    }
+                    
+                    if (hasDirectText || 
+                        ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'P', 'SPAN', 'DIV', 'A', 'BUTTON', 'LABEL', 'LI'].includes(element.tagName)) {
+                        textElements.push(element);
+                    }
+                }
+                
+                // Analyze each text element
+                textElements.forEach(function(element, index) {
+                    if (index > 200) return; // Limit to first 200 elements for performance
+                    
+                    var computedStyle = window.getComputedStyle(element);
+                    var fontFamily = computedStyle.fontFamily;
+                    var fontSize = computedStyle.fontSize;
+                    var fontWeight = computedStyle.fontWeight;
+                    var fontStyle = computedStyle.fontStyle;
+                    var lineHeight = computedStyle.lineHeight;
+                    var letterSpacing = computedStyle.letterSpacing;
+                    var textTransform = computedStyle.textTransform;
+                    var color = computedStyle.color;
+                    
+                    // Get element text content (truncated)
+                    var textContent = element.textContent || element.innerText || '';
+                    textContent = textContent.trim().substring(0, 100);
+                    
+                    if (textContent.length > 0) {
+                        var elementData = {
+                            tagName: element.tagName.toLowerCase(),
+                            className: element.className || '',
+                            id: element.id || '',
+                            fontFamily: fontFamily,
+                            fontSize: fontSize,
+                            fontWeight: fontWeight,
+                            fontStyle: fontStyle,
+                            lineHeight: lineHeight,
+                            letterSpacing: letterSpacing,
+                            textTransform: textTransform,
+                            color: color,
+                            textContent: textContent,
+                            xpath: getXPath(element)
+                        };
+                        
+                        fontData.elements.push(elementData);
+                        
+                        // Collect unique values
+                        fontData.uniqueFonts.add(fontFamily);
+                        fontData.fontSizes.add(fontSize);
+                        fontData.fontWeights.add(fontWeight);
+                        fontData.fontStyles.add(fontStyle);
+                    }
+                });
+                
+                // Convert Sets to Arrays for JSON serialization
+                fontData.uniqueFonts = Array.from(fontData.uniqueFonts);
+                fontData.fontSizes = Array.from(fontData.fontSizes);
+                fontData.fontWeights = Array.from(fontData.fontWeights);
+                fontData.fontStyles = Array.from(fontData.fontStyles);
+                
+                // Detect web fonts vs system fonts
+                fontData.uniqueFonts.forEach(function(fontFamily) {
+                    var fonts = fontFamily.split(',').map(f => f.trim().replace(/['"]/g, ''));
+                    
+                    fonts.forEach(function(font) {
+                        var isSystemFont = [
+                            'serif', 'sans-serif', 'monospace', 'cursive', 'fantasy',
+                            'Arial', 'Helvetica', 'Times', 'Times New Roman', 'Courier',
+                            'Courier New', 'Verdana', 'Georgia', 'Palatino', 'Garamond',
+                            'Bookman', 'Comic Sans MS', 'Trebuchet MS', 'Arial Black',
+                            'Impact', 'Lucida Console', 'Tahoma', 'Geneva', 'Lucida Sans',
+                            'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI',
+                            'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans',
+                            'Droid Sans', 'Helvetica Neue'
+                        ].some(sysFont => font.toLowerCase().includes(sysFont.toLowerCase()));
+                        
+                        if (isSystemFont) {
+                            if (!fontData.systemFonts.includes(font)) {
+                                fontData.systemFonts.push(font);
+                            }
+                        } else {
+                            if (!fontData.webFonts.includes(font)) {
+                                fontData.webFonts.push(font);
+                            }
+                        }
+                    });
+                });
+                
+                // Detect @font-face declarations
+                try {
+                    var styleSheets = document.styleSheets;
+                    for (var i = 0; i < styleSheets.length; i++) {
+                        try {
+                            var rules = styleSheets[i].cssRules || styleSheets[i].rules;
+                            if (rules) {
+                                for (var j = 0; j < rules.length; j++) {
+                                    if (rules[j].type === CSSRule.FONT_FACE_RULE) {
+                                        var fontFace = {
+                                            fontFamily: rules[j].style.fontFamily || '',
+                                            src: rules[j].style.src || '',
+                                            fontWeight: rules[j].style.fontWeight || '',
+                                            fontStyle: rules[j].style.fontStyle || '',
+                                            fontDisplay: rules[j].style.fontDisplay || ''
+                                        };
+                                        fontData.fontFaces.push(fontFace);
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            // Cross-origin stylesheet, skip
+                        }
+                    }
+                } catch (e) {
+                    // Error accessing stylesheets
+                }
+                
+                // Helper function to get XPath
+                function getXPath(element) {
+                    if (element.id !== '') {
+                        return '//*[@id="' + element.id + '"]';
+                    }
+                    if (element === document.body) {
+                        return '/html/body';
+                    }
+                    
+                    var ix = 0;
+                    var siblings = element.parentNode.childNodes;
+                    for (var i = 0; i < siblings.length; i++) {
+                        var sibling = siblings[i];
+                        if (sibling === element) {
+                            return getXPath(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+                        }
+                        if (sibling.nodeType === 1 && sibling.tagName === element.tagName) {
+                            ix++;
+                        }
+                    }
+                }
+                
+                return fontData;
+            })();
+            """
+            
+            def process_font_data(font_data):
+                if not font_data:
+                    self.main_window.status_info.setText("❌ Failed to detect fonts")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the font detector dialog
+                self.show_font_detector_dialog(font_data, current_url)
+            
+            # Execute JavaScript to get font data
+            page.runJavaScript(js_code, process_font_data)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Font detection error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_font_detector_dialog(self, font_data, base_url):
+        """Show dialog with font detection results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView, 
+                                   QFileDialog, QScrollArea, QFrame, QComboBox,
+                                   QCheckBox, QSpinBox, QColorDialog)
+        from PyQt5.QtCore import Qt, QTimer
+        from PyQt5.QtGui import QFont, QColor, QPalette
+        from datetime import datetime
+        import json
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"🔤 Font Detector - {len(font_data.get('uniqueFonts', []))} fonts found")
+        dialog.setMinimumSize(1200, 800)
+        dialog.resize(1400, 900)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"Font Analysis for: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #e8f4fd; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # Summary
+        unique_fonts = font_data.get('uniqueFonts', [])
+        web_fonts = font_data.get('webFonts', [])
+        system_fonts = font_data.get('systemFonts', [])
+        font_faces = font_data.get('fontFaces', [])
+        
+        summary_label = QLabel(f"📊 Summary: {len(unique_fonts)} font families, {len(web_fonts)} web fonts, {len(system_fonts)} system fonts, {len(font_faces)} @font-face rules")
+        summary_label.setStyleSheet("padding: 5px; background-color: #f0f8ff; border-radius: 3px;")
+        summary_label.setWordWrap(True)
+        layout.addWidget(summary_label)
+        
+        # Tab widget for different views
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Overview Tab
+        overview_widget = self.create_font_overview_tab(font_data)
+        tab_widget.addTab(overview_widget, "📊 Overview")
+        
+        # Font Families Tab
+        families_widget = self.create_font_families_tab(font_data)
+        tab_widget.addTab(families_widget, f"🔤 Font Families ({len(unique_fonts)})")
+        
+        # Elements Tab
+        elements_widget = self.create_font_elements_tab(font_data)
+        tab_widget.addTab(elements_widget, f"📝 Elements ({len(font_data.get('elements', []))})")
+        
+        # @font-face Tab
+        fontface_widget = self.create_fontface_tab(font_data)
+        tab_widget.addTab(fontface_widget, f"⚙️ @font-face ({len(font_faces)})")
+        
+        # Font Tester Tab
+        tester_widget = self.create_font_tester_tab(font_data)
+        tab_widget.addTab(tester_widget, "🧪 Font Tester")
+        
+        # Typography Analysis Tab
+        typography_widget = self.create_typography_analysis_tab(font_data)
+        tab_widget.addTab(typography_widget, "📐 Typography Analysis")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        export_button = QPushButton("💾 Export Report")
+        copy_css_button = QPushButton("📋 Copy CSS")
+        refresh_button = QPushButton("🔄 Refresh")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(copy_css_button)
+        button_layout.addWidget(refresh_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def export_report():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"font_analysis_{timestamp}.json"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export Font Analysis Report",
+                filename,
+                "JSON Files (*.json);;Text Files (*.txt);;CSS Files (*.css);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    export_data = {
+                        'url': base_url,
+                        'timestamp': datetime.now().isoformat(),
+                        'font_data': font_data
+                    }
+                    
+                    if file_path.endswith('.json'):
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            json.dump(export_data, f, indent=2, ensure_ascii=False)
+                    elif file_path.endswith('.css'):
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(self.generate_font_css(font_data))
+                    else:
+                        # Export as text report
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(self.generate_font_text_report(export_data))
+                    
+                    self.main_window.status_info.setText(f"✅ Font report exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        def copy_css():
+            css_content = self.generate_font_css(font_data)
+            from PyQt5.QtWidgets import QApplication
+            clipboard = QApplication.clipboard()
+            clipboard.setText(css_content)
+            self.main_window.status_info.setText("📋 Font CSS copied to clipboard")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        def refresh_fonts():
+            dialog.accept()
+            # Re-run the font detection
+            browser = self.get_current_browser()
+            if browser:
+                self.detect_fonts(browser)
+        
+        # Connect buttons
+        export_button.clicked.connect(export_report)
+        copy_css_button.clicked.connect(copy_css)
+        refresh_button.clicked.connect(refresh_fonts)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
+        
+        # Update main window status
+        self.main_window.status_info.setText(f"🔤 Font detection complete - {len(unique_fonts)} fonts found")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+    
+    def create_font_overview_tab(self, font_data):
+        """Create the overview tab for font analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QFrame, QScrollArea)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # Font Families Summary
+        families_frame = QFrame()
+        families_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px;")
+        families_layout = QVBoxLayout(families_frame)
+        
+        families_title = QLabel("🔤 Font Families")
+        families_title.setFont(QFont("Arial", 12, QFont.Bold))
+        families_layout.addWidget(families_title)
+        
+        unique_fonts = font_data.get('uniqueFonts', [])
+        for font_family in unique_fonts[:10]:  # Show first 10
+            font_label = QLabel(f"• {font_family}")
+            font_label.setWordWrap(True)
+            families_layout.addWidget(font_label)
+        
+        if len(unique_fonts) > 10:
+            more_label = QLabel(f"... and {len(unique_fonts) - 10} more")
+            more_label.setStyleSheet("font-style: italic; color: #666;")
+            families_layout.addWidget(more_label)
+        
+        scroll_layout.addWidget(families_frame)
+        
+        # Web Fonts vs System Fonts
+        types_frame = QFrame()
+        types_frame.setStyleSheet("background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 10px;")
+        types_layout = QVBoxLayout(types_frame)
+        
+        types_title = QLabel("📊 Font Types")
+        types_title.setFont(QFont("Arial", 12, QFont.Bold))
+        types_layout.addWidget(types_title)
+        
+        web_fonts = font_data.get('webFonts', [])
+        system_fonts = font_data.get('systemFonts', [])
+        
+        types_layout.addWidget(QLabel(f"🌐 Web Fonts: {len(web_fonts)}"))
+        for font in web_fonts[:5]:
+            types_layout.addWidget(QLabel(f"  • {font}"))
+        
+        types_layout.addWidget(QLabel(f"💻 System Fonts: {len(system_fonts)}"))
+        for font in system_fonts[:5]:
+            types_layout.addWidget(QLabel(f"  • {font}"))
+        
+        scroll_layout.addWidget(types_frame)
+        
+        # Typography Stats
+        stats_frame = QFrame()
+        stats_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 10px;")
+        stats_layout = QVBoxLayout(stats_frame)
+        
+        stats_title = QLabel("📐 Typography Statistics")
+        stats_title.setFont(QFont("Arial", 12, QFont.Bold))
+        stats_layout.addWidget(stats_title)
+        
+        font_sizes = font_data.get('fontSizes', [])
+        font_weights = font_data.get('fontWeights', [])
+        font_styles = font_data.get('fontStyles', [])
+        
+        stats_layout.addWidget(QLabel(f"Font Sizes: {len(font_sizes)} unique ({', '.join(font_sizes[:5])})"))
+        stats_layout.addWidget(QLabel(f"Font Weights: {len(font_weights)} unique ({', '.join(font_weights[:5])})"))
+        stats_layout.addWidget(QLabel(f"Font Styles: {len(font_styles)} unique ({', '.join(font_styles)})"))
+        
+        scroll_layout.addWidget(stats_frame)
+        
+        # @font-face Rules
+        fontface_count = len(font_data.get('fontFaces', []))
+        if fontface_count > 0:
+            fontface_frame = QFrame()
+            fontface_frame.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 10px;")
+            fontface_layout = QVBoxLayout(fontface_frame)
+            
+            fontface_title = QLabel("⚙️ @font-face Declarations")
+            fontface_title.setFont(QFont("Arial", 12, QFont.Bold))
+            fontface_layout.addWidget(fontface_title)
+            
+            fontface_layout.addWidget(QLabel(f"Found {fontface_count} @font-face rules"))
+            
+            for fontface in font_data.get('fontFaces', [])[:3]:
+                family = fontface.get('fontFamily', '').replace('"', '').replace("'", '')
+                fontface_layout.addWidget(QLabel(f"• {family}"))
+            
+            scroll_layout.addWidget(fontface_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def create_font_families_tab(self, font_data):
+        """Create the font families tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🔤 Font Families Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Tree widget for font families
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Font Family', 'Type', 'Usage Count', 'Sample Text'])
+        tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
+        
+        unique_fonts = font_data.get('uniqueFonts', [])
+        web_fonts = font_data.get('webFonts', [])
+        system_fonts = font_data.get('systemFonts', [])
+        elements = font_data.get('elements', [])
+        
+        # Count usage for each font family
+        font_usage = {}
+        for element in elements:
+            font_family = element.get('fontFamily', '')
+            if font_family in font_usage:
+                font_usage[font_family] += 1
+            else:
+                font_usage[font_family] = 1
+        
+        for font_family in unique_fonts:
+            item = QTreeWidgetItem()
+            item.setText(0, font_family)
+            
+            # Determine font type
+            is_web_font = any(web_font in font_family for web_font in web_fonts)
+            is_system_font = any(sys_font in font_family for sys_font in system_fonts)
+            
+            if is_web_font:
+                item.setText(1, "🌐 Web Font")
+            elif is_system_font:
+                item.setText(1, "💻 System Font")
+            else:
+                item.setText(1, "❓ Unknown")
+            
+            # Usage count
+            usage_count = font_usage.get(font_family, 0)
+            item.setText(2, str(usage_count))
+            
+            # Sample text
+            sample_element = next((el for el in elements if el.get('fontFamily') == font_family), None)
+            if sample_element:
+                sample_text = sample_element.get('textContent', '')[:50]
+                item.setText(3, sample_text + ('...' if len(sample_text) == 50 else ''))
+            
+            tree.addTopLevelItem(item)
+        
+        layout.addWidget(tree)
+        
+        return widget
+    
+    def create_font_elements_tab(self, font_data):
+        """Create the elements tab showing font usage per element"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel)
+        from PyQt5.QtCore import Qt
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("📝 Elements Font Usage")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Tree widget for elements
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Element', 'Font Family', 'Size', 'Weight', 'Style', 'Color', 'Text Preview'])
+        tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(6, QHeaderView.Stretch)
+        
+        elements = font_data.get('elements', [])
+        
+        for element in elements[:100]:  # Limit to first 100 for performance
+            item = QTreeWidgetItem()
+            
+            # Element info
+            tag_name = element.get('tagName', '')
+            class_name = element.get('className', '')
+            element_id = element.get('id', '')
+            
+            element_desc = tag_name
+            if element_id:
+                element_desc += f"#{element_id}"
+            if class_name:
+                element_desc += f".{class_name[:20]}"
+            
+            item.setText(0, element_desc)
+            item.setText(1, element.get('fontFamily', ''))
+            item.setText(2, element.get('fontSize', ''))
+            item.setText(3, element.get('fontWeight', ''))
+            item.setText(4, element.get('fontStyle', ''))
+            item.setText(5, element.get('color', ''))
+            
+            # Text preview
+            text_content = element.get('textContent', '')
+            item.setText(6, text_content[:60] + ('...' if len(text_content) > 60 else ''))
+            
+            tree.addTopLevelItem(item)
+        
+        if len(elements) > 100:
+            info_label = QLabel(f"Showing first 100 elements out of {len(elements)} total")
+            info_label.setStyleSheet("font-style: italic; color: #666; padding: 5px;")
+            layout.addWidget(info_label)
+        
+        layout.addWidget(tree)
+        
+        return widget
+    
+    def create_fontface_tab(self, font_data):
+        """Create the @font-face tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QLabel, 
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView)
+        from PyQt5.QtCore import Qt
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("⚙️ @font-face Declarations")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        font_faces = font_data.get('fontFaces', [])
+        
+        if not font_faces:
+            no_fontface_label = QLabel("❌ No @font-face declarations found.\n\nThis page is using system fonts or web fonts loaded via external services.")
+            no_fontface_label.setStyleSheet("padding: 20px; background-color: #f8d7da; border-radius: 5px; color: #721c24;")
+            no_fontface_label.setWordWrap(True)
+            layout.addWidget(no_fontface_label)
+        else:
+            # Tree widget for @font-face rules
+            tree = QTreeWidget()
+            tree.setHeaderLabels(['Font Family', 'Source', 'Weight', 'Style', 'Display'])
+            tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+            tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+            tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+            tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+            
+            for fontface in font_faces:
+                item = QTreeWidgetItem()
+                
+                family = fontface.get('fontFamily', '').replace('"', '').replace("'", '')
+                item.setText(0, family)
+                
+                src = fontface.get('src', '')
+                # Extract URL from src if present
+                if 'url(' in src:
+                    import re
+                    urls = re.findall(r'url\(["\']?([^"\']+)["\']?\)', src)
+                    if urls:
+                        src = urls[0]
+                        if len(src) > 50:
+                            src = '...' + src[-47:]
+                
+                item.setText(1, src)
+                item.setText(2, fontface.get('fontWeight', ''))
+                item.setText(3, fontface.get('fontStyle', ''))
+                item.setText(4, fontface.get('fontDisplay', ''))
+                
+                tree.addTopLevelItem(item)
+            
+            layout.addWidget(tree)
+            
+            # CSS Preview
+            css_label = QLabel("📋 Generated CSS:")
+            css_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+            layout.addWidget(css_label)
+            
+            css_text = QTextEdit()
+            css_text.setReadOnly(True)
+            css_text.setMaximumHeight(150)
+            css_text.setStyleSheet("font-family: monospace; background-color: #f8f9fa;")
+            
+            css_content = self.generate_fontface_css(font_faces)
+            css_text.setPlainText(css_content)
+            
+            layout.addWidget(css_text)
+        
+        return widget
+    
+    def create_font_tester_tab(self, font_data):
+        """Create the font tester tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QComboBox, QSpinBox, QTextEdit, QCheckBox,
+                                   QPushButton, QColorDialog, QFrame)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont, QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🧪 Font Tester")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Controls frame
+        controls_frame = QFrame()
+        controls_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px;")
+        controls_layout = QVBoxLayout(controls_frame)
+        
+        # Font family selector
+        font_row = QHBoxLayout()
+        font_row.addWidget(QLabel("Font Family:"))
+        
+        font_combo = QComboBox()
+        font_combo.setEditable(True)
+        unique_fonts = font_data.get('uniqueFonts', [])
+        for font_family in unique_fonts:
+            font_combo.addItem(font_family)
+        font_row.addWidget(font_combo)
+        
+        controls_layout.addLayout(font_row)
+        
+        # Size and weight controls
+        size_weight_row = QHBoxLayout()
+        
+        size_weight_row.addWidget(QLabel("Size:"))
+        size_spin = QSpinBox()
+        size_spin.setRange(8, 72)
+        size_spin.setValue(16)
+        size_weight_row.addWidget(size_spin)
+        
+        size_weight_row.addWidget(QLabel("Weight:"))
+        weight_combo = QComboBox()
+        weights = ['normal', 'bold', '100', '200', '300', '400', '500', '600', '700', '800', '900']
+        weight_combo.addItems(weights)
+        size_weight_row.addWidget(weight_combo)
+        
+        controls_layout.addLayout(size_weight_row)
+        
+        # Style controls
+        style_row = QHBoxLayout()
+        
+        italic_cb = QCheckBox("Italic")
+        underline_cb = QCheckBox("Underline")
+        
+        color_btn = QPushButton("Text Color")
+        color_btn.setStyleSheet("background-color: #000000; color: white;")
+        
+        style_row.addWidget(italic_cb)
+        style_row.addWidget(underline_cb)
+        style_row.addWidget(color_btn)
+        style_row.addStretch()
+        
+        controls_layout.addLayout(style_row)
+        
+        layout.addWidget(controls_frame)
+        
+        # Preview text area
+        preview_label = QLabel("Preview:")
+        preview_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        layout.addWidget(preview_label)
+        
+        preview_text = QTextEdit()
+        preview_text.setPlainText("The quick brown fox jumps over the lazy dog.\nABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789")
+        preview_text.setMinimumHeight(200)
+        layout.addWidget(preview_text)
+        
+        # Current color for color picker
+        current_color = QColor(0, 0, 0)
+        
+        def update_preview():
+            font_family = font_combo.currentText()
+            font_size = size_spin.value()
+            font_weight = weight_combo.currentText()
+            is_italic = italic_cb.isChecked()
+            is_underline = underline_cb.isChecked()
+            
+            # Create font
+            font = QFont()
+            font.setFamily(font_family)
+            font.setPointSize(font_size)
+            
+            if font_weight == 'bold':
+                font.setBold(True)
+            elif font_weight.isdigit():
+                font.setWeight(int(font_weight) // 10)
+            
+            font.setItalic(is_italic)
+            font.setUnderline(is_underline)
+            
+            preview_text.setFont(font)
+            
+            # Set text color
+            palette = preview_text.palette()
+            palette.setColor(palette.Text, current_color)
+            preview_text.setPalette(palette)
+        
+        def choose_color():
+            nonlocal current_color
+            color = QColorDialog.getColor(current_color, widget)
+            if color.isValid():
+                current_color = color
+                color_btn.setStyleSheet(f"background-color: {color.name()}; color: {'white' if color.lightness() < 128 else 'black'};")
+                update_preview()
+        
+        # Connect controls
+        font_combo.currentTextChanged.connect(update_preview)
+        size_spin.valueChanged.connect(update_preview)
+        weight_combo.currentTextChanged.connect(update_preview)
+        italic_cb.toggled.connect(update_preview)
+        underline_cb.toggled.connect(update_preview)
+        color_btn.clicked.connect(choose_color)
+        
+        # Initial preview update
+        update_preview()
+        
+        return widget
+    
+    def create_typography_analysis_tab(self, font_data):
+        """Create the typography analysis tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QFrame, QScrollArea)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("📐 Typography Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # Font Size Analysis
+        sizes_frame = QFrame()
+        sizes_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px;")
+        sizes_layout = QVBoxLayout(sizes_frame)
+        
+        sizes_title = QLabel("📏 Font Size Analysis")
+        sizes_title.setFont(QFont("Arial", 12, QFont.Bold))
+        sizes_layout.addWidget(sizes_title)
+        
+        font_sizes = font_data.get('fontSizes', [])
+        elements = font_data.get('elements', [])
+        
+        # Parse and analyze font sizes
+        size_usage = {}
+        for element in elements:
+            size = element.get('fontSize', '')
+            if size in size_usage:
+                size_usage[size] += 1
+            else:
+                size_usage[size] = 1
+        
+        # Sort by usage
+        sorted_sizes = sorted(size_usage.items(), key=lambda x: x[1], reverse=True)
+        
+        sizes_layout.addWidget(QLabel(f"Total unique font sizes: {len(font_sizes)}"))
+        sizes_layout.addWidget(QLabel("Most used sizes:"))
+        
+        for size, count in sorted_sizes[:10]:
+            sizes_layout.addWidget(QLabel(f"  • {size}: {count} elements"))
+        
+        scroll_layout.addWidget(sizes_frame)
+        
+        # Font Weight Analysis
+        weights_frame = QFrame()
+        weights_frame.setStyleSheet("background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 10px;")
+        weights_layout = QVBoxLayout(weights_frame)
+        
+        weights_title = QLabel("⚖️ Font Weight Analysis")
+        weights_title.setFont(QFont("Arial", 12, QFont.Bold))
+        weights_layout.addWidget(weights_title)
+        
+        font_weights = font_data.get('fontWeights', [])
+        
+        # Analyze font weights
+        weight_usage = {}
+        for element in elements:
+            weight = element.get('fontWeight', '')
+            if weight in weight_usage:
+                weight_usage[weight] += 1
+            else:
+                weight_usage[weight] = 1
+        
+        sorted_weights = sorted(weight_usage.items(), key=lambda x: x[1], reverse=True)
+        
+        weights_layout.addWidget(QLabel(f"Total unique font weights: {len(font_weights)}"))
+        weights_layout.addWidget(QLabel("Weight distribution:"))
+        
+        for weight, count in sorted_weights:
+            weights_layout.addWidget(QLabel(f"  • {weight}: {count} elements"))
+        
+        scroll_layout.addWidget(weights_frame)
+        
+        # Typography Recommendations
+        recommendations_frame = QFrame()
+        recommendations_frame.setStyleSheet("background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px; padding: 10px;")
+        recommendations_layout = QVBoxLayout(recommendations_frame)
+        
+        recommendations_title = QLabel("💡 Typography Recommendations")
+        recommendations_title.setFont(QFont("Arial", 12, QFont.Bold))
+        recommendations_layout.addWidget(recommendations_title)
+        
+        # Generate recommendations
+        recommendations = []
+        
+        if len(font_data.get('uniqueFonts', [])) > 5:
+            recommendations.append("Consider reducing the number of font families for better consistency")
+        
+        if len(font_sizes) > 8:
+            recommendations.append("Too many font sizes detected - consider using a typographic scale")
+        
+        web_fonts = font_data.get('webFonts', [])
+        if len(web_fonts) > 3:
+            recommendations.append("Multiple web fonts may impact page load performance")
+        
+        if not font_data.get('fontFaces'):
+            recommendations.append("Consider using @font-face for better font loading control")
+        
+        if not recommendations:
+            recommendations.append("Typography looks well-organized!")
+        
+        for rec in recommendations:
+            rec_label = QLabel(f"• {rec}")
+            rec_label.setWordWrap(True)
+            recommendations_layout.addWidget(rec_label)
+        
+        scroll_layout.addWidget(recommendations_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def generate_font_css(self, font_data):
+        """Generate CSS based on detected fonts"""
+        css_lines = []
+        css_lines.append("/* Generated CSS from Font Detector */")
+        css_lines.append("")
+        
+        # @font-face rules
+        font_faces = font_data.get('fontFaces', [])
+        if font_faces:
+            css_lines.append("/* @font-face declarations */")
+            for fontface in font_faces:
+                css_lines.append("@font-face {")
+                if fontface.get('fontFamily'):
+                    css_lines.append(f"  font-family: {fontface['fontFamily']};")
+                if fontface.get('src'):
+                    css_lines.append(f"  src: {fontface['src']};")
+                if fontface.get('fontWeight'):
+                    css_lines.append(f"  font-weight: {fontface['fontWeight']};")
+                if fontface.get('fontStyle'):
+                    css_lines.append(f"  font-style: {fontface['fontStyle']};")
+                if fontface.get('fontDisplay'):
+                    css_lines.append(f"  font-display: {fontface['fontDisplay']};")
+                css_lines.append("}")
+                css_lines.append("")
+        
+        # Font family variables
+        unique_fonts = font_data.get('uniqueFonts', [])
+        if unique_fonts:
+            css_lines.append("/* CSS Custom Properties for Font Families */")
+            css_lines.append(":root {")
+            for i, font_family in enumerate(unique_fonts[:5]):  # Limit to first 5
+                var_name = f"--font-family-{i+1}"
+                css_lines.append(f"  {var_name}: {font_family};")
+            css_lines.append("}")
+            css_lines.append("")
+        
+        return '\n'.join(css_lines)
+    
+    def generate_fontface_css(self, font_faces):
+        """Generate CSS for @font-face rules"""
+        css_lines = []
+        
+        for fontface in font_faces:
+            css_lines.append("@font-face {")
+            if fontface.get('fontFamily'):
+                css_lines.append(f"  font-family: {fontface['fontFamily']};")
+            if fontface.get('src'):
+                css_lines.append(f"  src: {fontface['src']};")
+            if fontface.get('fontWeight'):
+                css_lines.append(f"  font-weight: {fontface['fontWeight']};")
+            if fontface.get('fontStyle'):
+                css_lines.append(f"  font-style: {fontface['fontStyle']};")
+            if fontface.get('fontDisplay'):
+                css_lines.append(f"  font-display: {fontface['fontDisplay']};")
+            css_lines.append("}")
+            css_lines.append("")
+        
+        return '\n'.join(css_lines)
+    
+    def generate_font_text_report(self, export_data):
+        """Generate a text-based font report"""
+        lines = []
+        lines.append("FONT ANALYSIS REPORT")
+        lines.append("=" * 50)
+        lines.append(f"URL: {export_data['url']}")
+        lines.append(f"Analysis Date: {export_data['timestamp']}")
+        lines.append("")
+        
+        font_data = export_data['font_data']
+        
+        # Summary
+        unique_fonts = font_data.get('uniqueFonts', [])
+        web_fonts = font_data.get('webFonts', [])
+        system_fonts = font_data.get('systemFonts', [])
+        font_faces = font_data.get('fontFaces', [])
+        
+        lines.append("SUMMARY:")
+        lines.append("-" * 20)
+        lines.append(f"Total Font Families: {len(unique_fonts)}")
+        lines.append(f"Web Fonts: {len(web_fonts)}")
+        lines.append(f"System Fonts: {len(system_fonts)}")
+        lines.append(f"@font-face Rules: {len(font_faces)}")
+        lines.append("")
+        
+        # Font families
+        if unique_fonts:
+            lines.append("FONT FAMILIES:")
+            lines.append("-" * 20)
+            for font_family in unique_fonts:
+                lines.append(f"• {font_family}")
+            lines.append("")
+        
+        # Web fonts
+        if web_fonts:
+            lines.append("WEB FONTS:")
+            lines.append("-" * 20)
+            for font in web_fonts:
+                lines.append(f"• {font}")
+            lines.append("")
+        
+        # Typography stats
+        font_sizes = font_data.get('fontSizes', [])
+        font_weights = font_data.get('fontWeights', [])
+        
+        lines.append("TYPOGRAPHY STATISTICS:")
+        lines.append("-" * 20)
+        lines.append(f"Font Sizes: {len(font_sizes)} unique")
+        lines.append(f"Font Weights: {len(font_weights)} unique")
         lines.append("")
         
         return '\n'.join(lines)
