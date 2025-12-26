@@ -19,6 +19,7 @@ from clipboard_manager import ClipboardManager
 from clipboard_dialog import ClipboardHistoryDialog
 from ping_tool import PingDialog
 from curl_tool import CurlDialog
+from dns_tool import DNSDialog
 from speed_test_tool import SpeedTestDialog
 from command_line_tool import CommandLineWidget
 import ui_helpers
@@ -437,6 +438,13 @@ class MainWindow(QMainWindow):
         curl_action.setStatusTip("Make HTTP requests and test APIs")
         curl_action.triggered.connect(self.show_curl_tool)
         tools_menu.addAction(curl_action)
+        
+        # DNS Tool action
+        dns_action = QAction("🌐 DNS/Nameserver Check", self)
+        dns_action.setShortcut("Ctrl+D")
+        dns_action.setStatusTip("Check DNS records and nameserver information")
+        dns_action.triggered.connect(self.show_dns_tool)
+        tools_menu.addAction(dns_action)
         
         # Speed Test Tool action
         speed_test_action = QAction("⚡ Speed Test", self)
@@ -879,6 +887,16 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.curl_dialog.raise_()
             self.curl_dialog.activateWindow()
+    
+    def show_dns_tool(self):
+        """Show DNS tool dialog"""
+        if not hasattr(self, 'dns_dialog') or self.dns_dialog is None or not self.dns_dialog.isVisible():
+            self.dns_dialog = DNSDialog(self)
+            self.dns_dialog.show()
+        else:
+            # Bring existing dialog to front
+            self.dns_dialog.raise_()
+            self.dns_dialog.activateWindow()
     
     def show_speed_test_tool(self):
         """Show speed test dialog"""
