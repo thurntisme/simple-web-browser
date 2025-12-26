@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💾 Store Management Demo</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            margin: 20px auto;
+        }
+
+        .storage-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+            border-left: 4px solid #28a745;
+            transition: transform 0.2s ease;
+        }
+
+        .storage-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .localStorage-card {
+            border-left-color: #007bff;
+            background: #f0f8ff;
+        }
+
+        .sessionStorage-card {
+            border-left-color: #ffc107;
+            background: #fffbf0;
+        }
+
+        .cookies-card {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+
+        .indexeddb-card {
+            border-left-color: #6f42c1;
+            background: #f8f5ff;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+
+        .storage-status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin: 5px;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-empty {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .btn-storage {
+            margin: 5px;
+            min-width: 120px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="text-center mb-5">
+            <h1 class="display-4 mb-3">💾 Store Management Demo</h1>
+            <p class="lead">A comprehensive demonstration page for testing browser storage management</p>
+        </div>
+
+        <div class="alert alert-info">
+            <h4><i class="fas fa-info-circle"></i> How to Use the Store Management Tool</h4>
+            <p class="mb-0">
+                <strong>Right-click anywhere on this page</strong> and select <strong>"💾 Store Management"</strong>
+                to analyze and manage all browser storage including localStorage, sessionStorage, cookies, and more.
+            </p>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-home fa-3x text-primary mb-3"></i>
+                        <h5>localStorage</h5>
+                        <p class="card-text">Persistent local storage</p>
+                        <span class="status-active" id="localStorage-status">✅ Active</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-clock fa-3x text-warning mb-3"></i>
+                        <h5>sessionStorage</h5>
+                        <p class="card-text">Session-based storage</p>
+                        <span class="status-active" id="sessionStorage-status">✅ Active</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-cookie-bite fa-3x text-danger mb-3"></i>
+                        <h5>Cookies</h5>
+                        <p class="card-text">HTTP cookies</p>
+                        <span class="status-active" id="cookies-status">✅ Active</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-server fa-3x text-info mb-3"></i>
+                        <h5>PHP Sessions</h5>
+                        <p class="card-text">Server-side sessions</p>
+                        <span class="status-active" id="php-sessions-status">✅ Simulated</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-database fa-3x text-success mb-3"></i>
+                        <h5>IndexedDB</h5>
+                        <p class="card-text">Advanced database</p>
+                        <span class="status-active" id="indexeddb-status">✅ Available</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-grid">
+            <div class="localStorage-card storage-card">
+                <h4><i class="fas fa-home"></i> localStorage Demo</h4>
+                <p>Persistent storage that survives browser restarts:</p>
+                <div class="mb-3">
+                    <button class="btn btn-primary btn-storage" onclick="addLocalStorageData()">
+                        <i class="fas fa-plus"></i> Add Data
+                    </button>
+                    <button class="btn btn-info btn-storage" onclick="showLocalStorageData()">
+                        <i class="fas fa-eye"></i> View Data
+                    </button>
+                    <button class="btn btn-danger btn-storage" onclick="clearLocalStorageData()">
+                        <i class="fas fa-trash"></i> Clear Data
+                    </button>
+                </div>
+                <div class="code-block" id="localStorage-display">
+                    localStorage is empty
+                </div>
+            </div>
+
+            <div class="sessionStorage-card storage-card">
+                <h4><i class="fas fa-clock"></i> sessionStorage Demo</h4>
+                <p>Temporary storage that clears when tab closes:</p>
+                <div class="mb-3">
+                    <button class="btn btn-warning btn-storage" onclick="addSessionStorageData()">
+                        <i class="fas fa-plus"></i> Add Data
+                    </button>
+                    <button class="btn btn-info btn-storage" onclick="showSessionStorageData()">
+                        <i class="fas fa-eye"></i> View Data
+                    </button>
+                    <button class="btn btn-danger btn-storage" onclick="clearSessionStorageData()">
+                        <i class="fas fa-trash"></i> Clear Data
+                    </button>
+                </div>
+                <div class="code-block" id="sessionStorage-display">
+                    sessionStorage is empty
+                </div>
+            </div>
+
+            <div class="cookies-card storage-card">
+                <h4><i class="fas fa-cookie-bite"></i> Cookies Demo</h4>
+                <p>HTTP cookies with various attributes:</p>
+                <div class="mb-3">
+                    <button class="btn btn-danger btn-storage" onclick="addCookies()">
+                        <i class="fas fa-plus"></i> Add Cookies
+                    </button>
+                    <button class="btn btn-info btn-storage" onclick="showCookies()">
+                        <i class="fas fa-eye"></i> View Cookies
+                    </button>
+                    <button class="btn btn-danger btn-storage" onclick="clearCookies()">
+                        <i class="fas fa-trash"></i> Clear Cookies
+                    </button>
+                </div>
+                <div class="code-block" id="cookies-display">
+                    No cookies set
+                </div>
+            </div>
+
+            <div class="storage-card" style="border-left-color: #17a2b8; background: #f0fdff;">
+                <h4><i class="fas fa-server"></i> PHP Sessions Demo</h4>
+                <p>Simulated PHP session detection (server-side storage):</p>
+                <div class="mb-3">
+                    <button class="btn btn-info btn-storage" onclick="simulatePHPSessions()">
+                        <i class="fas fa-plus"></i> Simulate Sessions
+                    </button>
+                    <button class="btn btn-info btn-storage" onclick="showPHPSessions()">
+                        <i class="fas fa-eye"></i> View Sessions
+                    </button>
+                    <button class="btn btn-danger btn-storage" onclick="clearPHPSessions()">
+                        <i class="fas fa-trash"></i> Clear Sessions
+                    </button>
+                </div>
+                <div class="code-block" id="php-sessions-display">
+                    No PHP sessions simulated
+                </div>
+            </div>
+
+            <div class="indexeddb-card storage-card">
+                <h4><i class="fas fa-database"></i> IndexedDB Demo</h4>
+                <p>Advanced database storage for complex data:</p>
+                <div class="mb-3">
+                    <button class="btn btn-purple btn-storage" onclick="createIndexedDB()"
+                        style="background-color: #6f42c1; color: white;">
+                        <i class="fas fa-plus"></i> Create DB
+                    </button>
+                    <button class="btn btn-info btn-storage" onclick="checkIndexedDB()">
+                        <i class="fas fa-eye"></i> Check DB
+                    </button>
+                    <button class="btn btn-danger btn-storage" onclick="deleteIndexedDB()">
+                        <i class="fas fa-trash"></i> Delete DB
+                    </button>
+                </div>
+                <div class="code-block" id="indexeddb-display">
+                    IndexedDB not initialized
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-success mt-5">
+            <h4><i class="fas fa-tools"></i> What the Store Management Tool Will Show</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Storage Analysis:</h6>
+                    <ul class="mb-0">
+                        <li>All localStorage items with sizes</li>
+                        <li>All sessionStorage items with types</li>
+                        <li>Cookie details with security attributes</li>
+                        <li>IndexedDB availability and databases</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>Management Features:</h6>
+                    <ul class="mb-0">
+                        <li>Individual item deletion</li>
+                        <li>Bulk storage clearing</li>
+                        <li>Storage search and filtering</li>
+                        <li>Export storage data</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-5">
+            <h3>🎯 Ready to Manage Storage?</h3>
+            <p class="lead">
+                Right-click anywhere on this page and select <strong>"💾 Store Management"</strong>
+                to see comprehensive storage analysis and management tools!
+            </p>
+            <div class="mt-3" id="storage-summary">
+                <span class="status-empty">Loading storage info...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // localStorage functions
+        function addLocalStorageData() {
+            const timestamp = new Date().toISOString();
+            localStorage.setItem('demo_timestamp', timestamp);
+            localStorage.setItem('demo_user', JSON.stringify({
+                name: 'Demo User',
+                id: Math.floor(Math.random() * 1000),
+                preferences: {
+                    theme: 'dark',
+                    language: 'en',
+                    notifications: true
+                }
+            }));
+            localStorage.setItem('demo_settings', JSON.stringify({
+                autoSave: true,
+                version: '1.2.3',
+                features: ['feature1', 'feature2', 'feature3']
+            }));
+            localStorage.setItem('demo_large_data', 'x'.repeat(5000)); // Large data for size testing
+            showLocalStorageData();
+        }
+
+        function showLocalStorageData() {
+            const display = document.getElementById('localStorage-display');
+            if (localStorage.length === 0) {
+                display.textContent = 'localStorage is empty';
+                return;
+            }
+
+            let content = `localStorage (${localStorage.length} items):\n`;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                content += `${key}: ${value.substring(0, 100)}${value.length > 100 ? '...' : ''}\n`;
+            }
+            display.textContent = content;
+        }
+
+        function clearLocalStorageData() {
+            localStorage.clear();
+            showLocalStorageData();
+        }
+
+        // sessionStorage functions
+        function addSessionStorageData() {
+            const timestamp = new Date().toISOString();
+            sessionStorage.setItem('session_id', 'sess_' + Math.random().toString(36).substr(2, 9));
+            sessionStorage.setItem('session_start', timestamp);
+            sessionStorage.setItem('session_data', JSON.stringify({
+                pageViews: Math.floor(Math.random() * 10) + 1,
+                currentTab: 'demo',
+                tempSettings: {
+                    zoom: 100,
+                    sidebar: true
+                }
+            }));
+            sessionStorage.setItem('temp_form_data', JSON.stringify({
+                name: 'Temporary Name',
+                email: 'temp@example.com',
+                message: 'This is temporary form data that will be lost when the session ends.'
+            }));
+            showSessionStorageData();
+        }
+
+        function showSessionStorageData() {
+            const display = document.getElementById('sessionStorage-display');
+            if (sessionStorage.length === 0) {
+                display.textContent = 'sessionStorage is empty';
+                return;
+            }
+
+            let content = `sessionStorage (${sessionStorage.length} items):\n`;
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                const value = sessionStorage.getItem(key);
+                content += `${key}: ${value.substring(0, 100)}${value.length > 100 ? '...' : ''}\n`;
+            }
+            display.textContent = content;
+        }
+
+        function clearSessionStorageData() {
+            sessionStorage.clear();
+            showSessionStorageData();
+        }
+
+        // Cookie functions
+        function addCookies() {
+            // Set various types of cookies
+            document.cookie = "demo_session=abc123def456; path=/; max-age=3600";
+            document.cookie = "demo_user_pref=theme_dark; path=/; max-age=86400";
+            document.cookie = "demo_analytics=visitor_" + Math.random().toString(36).substr(2, 9) + "; path=/; max-age=31536000";
+            document.cookie = "demo_temp=temp_value; path=/; max-age=300";
+            document.cookie = "demo_secure=secure_data; path=/; secure; max-age=3600";
+            document.cookie = "demo_samesite=samesite_value; path=/; samesite=strict; max-age=3600";
+            showCookies();
+        }
+
+        function showCookies() {
+            const display = document.getElementById('cookies-display');
+            if (!document.cookie) {
+                display.textContent = 'No cookies set';
+                return;
+            }
+
+            const cookies = document.cookie.split(';');
+            let content = `Cookies (${cookies.length} items):\n`;
+            cookies.forEach(cookie => {
+                const [name, value] = cookie.trim().split('=');
+                content += `${name}: ${value}\n`;
+            });
+            display.textContent = content;
+        }
+
+        function clearCookies() {
+            // Clear all cookies by setting them to expire
+            document.cookie.split(";").forEach(function (c) {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+            showCookies();
+        }
+
+        // IndexedDB functions
+        let db = null;
+
+        function createIndexedDB() {
+            const request = indexedDB.open('DemoDatabase', 1);
+
+            request.onerror = function (event) {
+                document.getElementById('indexeddb-display').textContent = 'Error creating IndexedDB: ' + event.target.error;
+            };
+
+            request.onsuccess = function (event) {
+                db = event.target.result;
+                document.getElementById('indexeddb-display').textContent = 'IndexedDB "DemoDatabase" created successfully';
+
+                // Add some sample data
+                const transaction = db.transaction(['users'], 'readwrite');
+                const objectStore = transaction.objectStore('users');
+
+                objectStore.add({ id: 1, name: 'John Doe', email: 'john@example.com' });
+                objectStore.add({ id: 2, name: 'Jane Smith', email: 'jane@example.com' });
+                objectStore.add({ id: 3, name: 'Bob Johnson', email: 'bob@example.com' });
+            };
+
+            request.onupgradeneeded = function (event) {
+                db = event.target.result;
+                const objectStore = db.createObjectStore('users', { keyPath: 'id' });
+                objectStore.createIndex('name', 'name', { unique: false });
+                objectStore.createIndex('email', 'email', { unique: true });
+            };
+        }
+
+        function checkIndexedDB() {
+            if (!db) {
+                document.getElementById('indexeddb-display').textContent = 'IndexedDB not initialized. Click "Create DB" first.';
+                return;
+            }
+
+            const transaction = db.transaction(['users'], 'readonly');
+            const objectStore = transaction.objectStore('users');
+            const request = objectStore.getAll();
+
+            request.onsuccess = function (event) {
+                const users = event.target.result;
+                document.getElementById('indexeddb-display').textContent =
+                    `IndexedDB "DemoDatabase" contains ${users.length} users:\n` +
+                    users.map(user => `${user.name} (${user.email})`).join('\n');
+            };
+        }
+
+        function deleteIndexedDB() {
+            if (db) {
+                db.close();
+                db = null;
+            }
+
+            const deleteRequest = indexedDB.deleteDatabase('DemoDatabase');
+            deleteRequest.onsuccess = function () {
+                document.getElementById('indexeddb-display').textContent = 'IndexedDB "DemoDatabase" deleted successfully';
+            };
+            deleteRequest.onerror = function () {
+                document.getElementById('indexeddb-display').textContent = 'Error deleting IndexedDB';
+            };
+        }
+
+        // Update storage summary
+        function updateStorageSummary() {
+            const localCount = localStorage.length;
+            const sessionCount = sessionStorage.length;
+            const cookieCount = document.cookie ? document.cookie.split(';').length : 0;
+
+            // Count PHP session cookies
+            let phpSessionCount = 0;
+            if (document.cookie) {
+                const cookies = document.cookie.split(';');
+                cookies.forEach(cookie => {
+                    const name = cookie.trim().split('=')[0].toLowerCase();
+                    if (name.includes('sess') || name.includes('phpsessid') ||
+                        name.includes('laravel') || name.includes('ci_session') ||
+                        name.includes('wordpress') || name.includes('rememberme')) {
+                        phpSessionCount++;
+                    }
+                });
+            }
+
+            const summary = document.getElementById('storage-summary');
+            summary.innerHTML = `
+                <span class="status-active">localStorage: ${localCount}</span>
+                <span class="status-active">sessionStorage: ${sessionCount}</span>
+                <span class="status-active">Cookies: ${cookieCount}</span>
+                <span class="status-active">PHP Sessions: ${phpSessionCount}</span>
+                <span class="status-active">IndexedDB: ${db ? 'Active' : 'Inactive'}</span>
+            `;
+        }
+
+        // PHP Session simulation functions
+        function simulatePHPSessions() {
+            // Simulate various PHP session patterns
+
+            // Standard PHPSESSID cookie
+            document.cookie = "PHPSESSID=" + generateSessionId() + "; path=/; max-age=3600";
+
+            // Laravel session cookie
+            document.cookie = "laravel_session=" + generateSessionId() + "; path=/; max-age=3600";
+
+            // CodeIgniter session cookie
+            document.cookie = "ci_session=" + generateSessionId() + "; path=/; max-age=3600";
+
+            // WordPress session cookies
+            document.cookie = "wordpress_logged_in_" + Math.random().toString(36).substr(2, 8) + "=" + generateSessionId() + "; path=/; max-age=3600";
+
+            // Symfony session cookie
+            document.cookie = "REMEMBERME=" + generateSessionId() + "; path=/; max-age=86400";
+
+            // Add session variables to page (simulated)
+            if (!document.getElementById('php-session-vars')) {
+                const script = document.createElement('script');
+                script.id = 'php-session-vars';
+                script.textContent = `
+                    // Simulated PHP session variables
+                    var $_SESSION = {
+                        'user_id': 12345,
+                        'username': 'demo_user',
+                        'login_time': '${new Date().toISOString()}',
+                        'permissions': ['read', 'write'],
+                        'session_token': '${generateSessionId()}'
+                    };
+                    console.log('PHP Session variables loaded:', $_SESSION);
+                `;
+                document.head.appendChild(script);
+            }
+
+            // Add meta tag with session info
+            if (!document.querySelector('meta[name="session-id"]')) {
+                const meta = document.createElement('meta');
+                meta.name = 'session-id';
+                meta.content = generateSessionId();
+                document.head.appendChild(meta);
+            }
+
+            showPHPSessions();
+        }
+
+        function generateSessionId() {
+            // Generate realistic PHP session ID patterns
+            const patterns = [
+                // Standard PHP session ID (26-40 chars, alphanumeric)
+                () => Math.random().toString(36).substr(2, 26) + Math.random().toString(36).substr(2, 6),
+                // Laravel style (40 chars)
+                () => Array.from({ length: 40 }, () => Math.random().toString(36)[2] || '0').join(''),
+                // Drupal style (32 chars hex)
+                () => Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
+                // Custom format
+                () => 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 10)
+            ];
+
+            const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+            return pattern();
+        }
+
+        function showPHPSessions() {
+            const display = document.getElementById('php-sessions-display');
+
+            // Count session-related cookies
+            const sessionCookies = [];
+            if (document.cookie) {
+                const cookies = document.cookie.split(';');
+                cookies.forEach(cookie => {
+                    const [name, value] = cookie.trim().split('=');
+                    if (name && (
+                        name.toLowerCase().includes('sess') ||
+                        name.toLowerCase().includes('phpsessid') ||
+                        name.toLowerCase().includes('laravel') ||
+                        name.toLowerCase().includes('ci_session') ||
+                        name.toLowerCase().includes('wordpress') ||
+                        name.toLowerCase().includes('rememberme')
+                    )) {
+                        sessionCookies.push({ name, value });
+                    }
+                });
+            }
+
+            if (sessionCookies.length === 0) {
+                display.textContent = 'No PHP sessions simulated';
+                return;
+            }
+
+            let content = `PHP Sessions Detected (${sessionCookies.length} cookies):\n`;
+            sessionCookies.forEach(cookie => {
+                const framework = detectFramework(cookie.name);
+                content += `${cookie.name}: ${cookie.value.substring(0, 20)}... [${framework}]\n`;
+            });
+
+            // Check for session variables
+            if (document.getElementById('php-session-vars')) {
+                content += '\nServer-side variables: $_SESSION detected in scripts\n';
+            }
+
+            // Check for meta tags
+            const sessionMeta = document.querySelector('meta[name="session-id"]');
+            if (sessionMeta) {
+                content += `Meta session: ${sessionMeta.content.substring(0, 20)}...\n`;
+            }
+
+            display.textContent = content;
+        }
+
+        function detectFramework(cookieName) {
+            const frameworks = {
+                'PHPSESSID': 'Standard PHP',
+                'laravel_session': 'Laravel',
+                'ci_session': 'CodeIgniter',
+                'wordpress_logged_in': 'WordPress',
+                'REMEMBERME': 'Symfony'
+            };
+
+            for (const [pattern, framework] of Object.entries(frameworks)) {
+                if (cookieName.toLowerCase().includes(pattern.toLowerCase())) {
+                    return framework;
+                }
+            }
+            return 'Unknown Framework';
+        }
+
+        function clearPHPSessions() {
+            // Clear session-related cookies
+            const sessionPatterns = ['sess', 'phpsessid', 'laravel', 'ci_session', 'wordpress', 'rememberme'];
+
+            if (document.cookie) {
+                document.cookie.split(";").forEach(function (c) {
+                    const cookieName = c.trim().split('=')[0].toLowerCase();
+                    const shouldClear = sessionPatterns.some(pattern => cookieName.includes(pattern));
+
+                    if (shouldClear) {
+                        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                    }
+                });
+            }
+
+            // Remove session script
+            const sessionScript = document.getElementById('php-session-vars');
+            if (sessionScript) {
+                sessionScript.remove();
+            }
+
+            // Remove session meta tag
+            const sessionMeta = document.querySelector('meta[name="session-id"]');
+            if (sessionMeta) {
+                sessionMeta.remove();
+            }
+
+            showPHPSessions();
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('💾 Store Management Demo Page Loaded');
+
+            // Show initial data
+            showLocalStorageData();
+            showSessionStorageData();
+            showCookies();
+            showPHPSessions();
+
+            // Check IndexedDB support
+            if ('indexedDB' in window) {
+                document.getElementById('indexeddb-status').innerHTML = '✅ Available';
+                document.getElementById('indexeddb-display').textContent = 'IndexedDB is available. Click "Create DB" to initialize.';
+            } else {
+                document.getElementById('indexeddb-status').innerHTML = '❌ Not Available';
+                document.getElementById('indexeddb-display').textContent = 'IndexedDB is not supported in this browser.';
+            }
+
+            // Update summary every 2 seconds
+            setInterval(updateStorageSummary, 2000);
+            updateStorageSummary();
+
+            // Add some initial demo data
+            if (localStorage.length === 0) {
+                localStorage.setItem('demo_welcome', 'Welcome to Store Management Demo!');
+                localStorage.setItem('demo_version', '1.0.0');
+            }
+
+            if (sessionStorage.length === 0) {
+                sessionStorage.setItem('session_demo', 'This is a demo session');
+                sessionStorage.setItem('page_load_time', new Date().toISOString());
+            }
+
+            if (!document.cookie) {
+                document.cookie = "demo_initial=initial_value; path=/; max-age=3600";
+            }
+
+            // Refresh displays
+            showLocalStorageData();
+            showSessionStorageData();
+            showCookies();
+            showPHPSessions();
+        });
+
+        // Storage event listeners
+        window.addEventListener('storage', function (e) {
+            console.log('Storage changed:', e.key, e.oldValue, e.newValue);
+            showLocalStorageData();
+        });
+    </script>
+</body>
+
+</html>

@@ -448,6 +448,11 @@ class TabManager:
                 csrf_cors_tester_action = QAction("🛡️ CSRF/CORS Visual Tester", self.main_window)
                 csrf_cors_tester_action.triggered.connect(lambda: self.test_csrf_cors(browser))
                 menu.addAction(csrf_cors_tester_action)
+                
+                # Add Store Management feature
+                store_management_action = QAction("💾 Store Management", self.main_window)
+                store_management_action.triggered.connect(lambda: self.manage_storage(browser))
+                menu.addAction(store_management_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -10207,5 +10212,1684 @@ CORS is enforced by browsers and configured by servers. Proper CORS configuratio
             for rec in recommendations:
                 lines.append(f"• {rec}")
             lines.append("")
+        
+        return '\n'.join(lines)
+    
+    def manage_storage(self, browser):
+        """Comprehensive storage management for localStorage, sessionStorage, cookies, etc."""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("💾 Analyzing browser storage...")
+            
+            # JavaScript to extract all storage data from the page
+            js_code = """
+            (function() {
+                var storageData = {
+                    localStorage: {},
+                    sessionStorage: {},
+                    cookies: [],
+                    phpSessions: [],
+                    indexedDB: [],
+                    webSQL: [],
+                    cacheStorage: [],
+                    serviceWorkerRegistrations: [],
+                    permissions: {},
+                    quota: {},
+                    storageEstimate: null,
+                    url: window.location.href,
+                    domain: window.location.hostname,
+                    protocol: window.location.protocol
+                };
+                
+                // Extract localStorage
+                try {
+                    if (typeof Storage !== 'undefined' && localStorage) {
+                        for (var i = 0; i < localStorage.length; i++) {
+                            var key = localStorage.key(i);
+                            var value = localStorage.getItem(key);
+                            storageData.localStorage[key] = {
+                                value: value,
+                                size: new Blob([value]).size,
+                                type: typeof value
+                            };
+                        }
+                    }
+                } catch (e) {
+                    storageData.localStorage = { error: e.message };
+                }
+                
+                // Extract sessionStorage
+                try {
+                    if (typeof Storage !== 'undefined' && sessionStorage) {
+                        for (var i = 0; i < sessionStorage.length; i++) {
+                            var key = sessionStorage.key(i);
+                            var value = sessionStorage.getItem(key);
+                            storageData.sessionStorage[key] = {
+                                value: value,
+                                size: new Blob([value]).size,
+                                type: typeof value
+                            };
+                        }
+                    }
+                } catch (e) {
+                    storageData.sessionStorage = { error: e.message };
+                }
+                
+                // Extract cookies
+                try {
+                    if (document.cookie) {
+                        var cookies = document.cookie.split(';');
+                        cookies.forEach(function(cookie) {
+                            var parts = cookie.trim().split('=');
+                            if (parts.length >= 2) {
+                                var name = parts[0].trim();
+                                var value = parts.slice(1).join('=').trim();
+                                
+                                var cookieData = {
+                                    name: name,
+                                    value: value,
+                                    size: new Blob([name + value]).size,
+                                    domain: window.location.hostname,
+                                    path: '/',
+                                    secure: false, // Can't determine from document.cookie
+                                    httpOnly: false, // Can't determine from document.cookie
+                                    sameSite: 'unknown',
+                                    isPHPSession: false
+                                };
+                                
+                                // Detect PHP session cookies
+                                if (name.toLowerCase() === 'phpsessid' || 
+                                    name.toLowerCase().includes('sess') ||
+                                    name.toLowerCase().includes('session') ||
+                                    /^[A-Z0-9]{26,40}$/i.test(value)) { // Common PHP session ID pattern
+                                    cookieData.isPHPSession = true;
+                                    storageData.phpSessions.push({
+                                        sessionId: value,
+                                        cookieName: name,
+                                        domain: window.location.hostname,
+                                        detected: 'cookie-based',
+                                        size: cookieData.size,
+                                        pattern: 'standard'
+                                    });
+                                }
+                                
+                                storageData.cookies.push(cookieData);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    storageData.cookies = [{ error: e.message }];
+                }
+                
+                // Additional PHP session detection methods
+                try {
+                    // Check for common PHP session indicators in the page
+                    var scripts = document.getElementsByTagName('script');
+                    var hasPhpSessionVars = false;
+                    
+                    for (var i = 0; i < scripts.length; i++) {
+                        var scriptContent = scripts[i].textContent || scripts[i].innerText || '';
+                        
+                        // Look for PHP session variables in JavaScript
+                        if (scriptContent.includes('$_SESSION') || 
+                            scriptContent.includes('session_id') ||
+                            scriptContent.includes('PHPSESSID') ||
+                            scriptContent.includes('session_start')) {
+                            hasPhpSessionVars = true;
+                            break;
+                        }
+                    }
+                    
+                    // Check for PHP session in URL parameters
+                    var urlParams = new URLSearchParams(window.location.search);
+                    var sessionInUrl = false;
+                    
+                    urlParams.forEach(function(value, key) {
+                        if (key.toLowerCase().includes('sess') || 
+                            key.toLowerCase() === 'phpsessid' ||
+                            /^[A-Z0-9]{26,40}$/i.test(value)) {
+                            sessionInUrl = true;
+                            storageData.phpSessions.push({
+                                sessionId: value,
+                                paramName: key,
+                                domain: window.location.hostname,
+                                detected: 'url-parameter',
+                                size: new Blob([key + value]).size,
+                                pattern: 'url-based'
+                            });
+                        }
+                    });
+                    
+                    // Check for PHP session indicators in meta tags
+                    var metaTags = document.getElementsByTagName('meta');
+                    for (var i = 0; i < metaTags.length; i++) {
+                        var name = metaTags[i].getAttribute('name') || '';
+                        var content = metaTags[i].getAttribute('content') || '';
+                        
+                        if (name.toLowerCase().includes('session') || 
+                            content.includes('PHPSESSID') ||
+                            content.includes('session_id')) {
+                            storageData.phpSessions.push({
+                                sessionId: content,
+                                metaName: name,
+                                domain: window.location.hostname,
+                                detected: 'meta-tag',
+                                size: new Blob([name + content]).size,
+                                pattern: 'meta-based'
+                            });
+                        }
+                    }
+                    
+                    // Check for server-side session indicators
+                    if (hasPhpSessionVars && storageData.phpSessions.length === 0) {
+                        storageData.phpSessions.push({
+                            sessionId: 'detected-in-scripts',
+                            domain: window.location.hostname,
+                            detected: 'server-side-variables',
+                            size: 0,
+                            pattern: 'script-based',
+                            note: 'PHP session variables detected in page scripts'
+                        });
+                    }
+                    
+                    // Check for common PHP frameworks session patterns
+                    var frameworks = [
+                        { name: 'Laravel', pattern: /laravel_session/i },
+                        { name: 'Symfony', pattern: /REMEMBERME|sf2s/i },
+                        { name: 'CodeIgniter', pattern: /ci_session/i },
+                        { name: 'CakePHP', pattern: /CAKEPHP/i },
+                        { name: 'Zend', pattern: /ZFSESSION/i },
+                        { name: 'WordPress', pattern: /wordpress_logged_in|wp-settings/i },
+                        { name: 'Drupal', pattern: /SESS[a-f0-9]{32}/i },
+                        { name: 'Joomla', pattern: /[a-f0-9]{32}/i }
+                    ];
+                    
+                    storageData.cookies.forEach(function(cookie) {
+                        frameworks.forEach(function(framework) {
+                            if (framework.pattern.test(cookie.name) || framework.pattern.test(cookie.value)) {
+                                var existingSession = storageData.phpSessions.find(function(session) {
+                                    return session.framework === framework.name;
+                                });
+                                
+                                if (!existingSession) {
+                                    storageData.phpSessions.push({
+                                        sessionId: cookie.value,
+                                        cookieName: cookie.name,
+                                        domain: window.location.hostname,
+                                        detected: 'framework-cookie',
+                                        size: cookie.size,
+                                        pattern: 'framework-based',
+                                        framework: framework.name
+                                    });
+                                }
+                            }
+                        });
+                    });
+                    
+                } catch (e) {
+                    // Error in PHP session detection
+                    console.log('PHP session detection error:', e.message);
+                }
+                
+                // Check IndexedDB
+                try {
+                    if ('indexedDB' in window) {
+                        // We can't easily enumerate all databases without knowing their names
+                        // So we'll just indicate IndexedDB is available
+                        storageData.indexedDB.push({
+                            available: true,
+                            note: 'IndexedDB is available but requires specific database names to enumerate'
+                        });
+                    }
+                } catch (e) {
+                    storageData.indexedDB = [{ error: e.message }];
+                }
+                
+                // Check WebSQL (deprecated but might still exist)
+                try {
+                    if ('openDatabase' in window) {
+                        storageData.webSQL.push({
+                            available: true,
+                            note: 'WebSQL is deprecated but still available'
+                        });
+                    }
+                } catch (e) {
+                    storageData.webSQL = [{ error: e.message }];
+                }
+                
+                // Check Cache Storage
+                try {
+                    if ('caches' in window) {
+                        // We'll indicate it's available but can't enumerate without async
+                        storageData.cacheStorage.push({
+                            available: true,
+                            note: 'Cache Storage API is available'
+                        });
+                    }
+                } catch (e) {
+                    storageData.cacheStorage = [{ error: e.message }];
+                }
+                
+                // Check Service Worker registrations
+                try {
+                    if ('serviceWorker' in navigator) {
+                        storageData.serviceWorkerRegistrations.push({
+                            available: true,
+                            note: 'Service Worker API is available'
+                        });
+                    }
+                } catch (e) {
+                    storageData.serviceWorkerRegistrations = [{ error: e.message }];
+                }
+                
+                // Check Storage Quota API
+                try {
+                    if ('storage' in navigator && 'estimate' in navigator.storage) {
+                        // We'll mark it as available but can't get estimate synchronously
+                        storageData.quota = {
+                            available: true,
+                            note: 'Storage Quota API is available'
+                        };
+                    }
+                } catch (e) {
+                    storageData.quota = { error: e.message };
+                }
+                
+                // Check Permissions API
+                try {
+                    if ('permissions' in navigator) {
+                        storageData.permissions = {
+                            available: true,
+                            note: 'Permissions API is available'
+                        };
+                    }
+                } catch (e) {
+                    storageData.permissions = { error: e.message };
+                }
+                
+                // Calculate total storage usage
+                var totalSize = 0;
+                
+                // Add localStorage size
+                Object.keys(storageData.localStorage).forEach(function(key) {
+                    if (storageData.localStorage[key].size) {
+                        totalSize += storageData.localStorage[key].size;
+                    }
+                });
+                
+                // Add sessionStorage size
+                Object.keys(storageData.sessionStorage).forEach(function(key) {
+                    if (storageData.sessionStorage[key].size) {
+                        totalSize += storageData.sessionStorage[key].size;
+                    }
+                });
+                
+                // Add cookies size
+                storageData.cookies.forEach(function(cookie) {
+                    if (cookie.size) {
+                        totalSize += cookie.size;
+                    }
+                });
+                
+                storageData.totalSize = totalSize;
+                
+                // Storage summary
+                storageData.summary = {
+                    localStorageItems: Object.keys(storageData.localStorage).length,
+                    sessionStorageItems: Object.keys(storageData.sessionStorage).length,
+                    cookiesCount: storageData.cookies.length,
+                    phpSessionsCount: storageData.phpSessions.length,
+                    totalSize: totalSize,
+                    hasIndexedDB: storageData.indexedDB.length > 0 && storageData.indexedDB[0].available,
+                    hasWebSQL: storageData.webSQL.length > 0 && storageData.webSQL[0].available,
+                    hasCacheStorage: storageData.cacheStorage.length > 0 && storageData.cacheStorage[0].available,
+                    hasServiceWorker: storageData.serviceWorkerRegistrations.length > 0 && storageData.serviceWorkerRegistrations[0].available,
+                    hasPHPSessions: storageData.phpSessions.length > 0
+                };
+                
+                return storageData;
+            })();
+            """
+            
+            def process_storage_data(storage_data):
+                if not storage_data:
+                    self.main_window.status_info.setText("❌ Failed to analyze storage")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the storage management dialog
+                self.show_storage_management_dialog(storage_data, current_url)
+            
+            # Execute JavaScript to get storage data
+            page.runJavaScript(js_code, process_storage_data)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Storage analysis error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_storage_management_dialog(self, storage_data, base_url):
+        """Show dialog with storage management interface"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView, 
+                                   QFileDialog, QScrollArea, QFrame, QMessageBox,
+                                   QCheckBox, QSpinBox, QComboBox, QLineEdit)
+        from PyQt5.QtCore import Qt, QTimer
+        from PyQt5.QtGui import QFont, QColor
+        from datetime import datetime
+        import json
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        summary = storage_data.get('summary', {})
+        total_items = summary.get('localStorageItems', 0) + summary.get('sessionStorageItems', 0) + summary.get('cookiesCount', 0)
+        dialog.setWindowTitle(f"💾 Store Management - {total_items} items found")
+        dialog.setMinimumSize(1200, 800)
+        dialog.resize(1400, 900)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"Storage Analysis for: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #e8f4fd; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # Summary
+        total_size = storage_data.get('totalSize', 0)
+        size_text = self.format_storage_size(total_size)
+        php_sessions_count = len(storage_data.get('phpSessions', []))
+        
+        summary_label = QLabel(f"📊 Summary: {summary.get('localStorageItems', 0)} localStorage, {summary.get('sessionStorageItems', 0)} sessionStorage, {summary.get('cookiesCount', 0)} cookies, {php_sessions_count} PHP sessions | Total size: {size_text}")
+        summary_label.setStyleSheet("padding: 5px; background-color: #f0f8ff; border-radius: 3px;")
+        summary_label.setWordWrap(True)
+        layout.addWidget(summary_label)
+        
+        # Tab widget for different storage types
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Overview Tab
+        overview_widget = self.create_storage_overview_tab(storage_data)
+        tab_widget.addTab(overview_widget, "📊 Overview")
+        
+        # localStorage Tab
+        local_storage_widget = self.create_local_storage_tab(storage_data)
+        local_count = len(storage_data.get('localStorage', {}))
+        tab_widget.addTab(local_storage_widget, f"🏠 localStorage ({local_count})")
+        
+        # sessionStorage Tab
+        session_storage_widget = self.create_session_storage_tab(storage_data)
+        session_count = len(storage_data.get('sessionStorage', {}))
+        tab_widget.addTab(session_storage_widget, f"⏱️ sessionStorage ({session_count})")
+        
+        # Cookies Tab
+        cookies_widget = self.create_cookies_tab(storage_data)
+        cookies_count = len(storage_data.get('cookies', []))
+        tab_widget.addTab(cookies_widget, f"🍪 Cookies ({cookies_count})")
+        
+        # PHP Sessions Tab
+        php_sessions_widget = self.create_php_sessions_tab(storage_data)
+        php_sessions_count = len(storage_data.get('phpSessions', []))
+        tab_widget.addTab(php_sessions_widget, f"🐘 PHP Sessions ({php_sessions_count})")
+        
+        # Advanced Storage Tab
+        advanced_widget = self.create_advanced_storage_tab(storage_data)
+        tab_widget.addTab(advanced_widget, "🔧 Advanced Storage")
+        
+        # Storage Tools Tab
+        tools_widget = self.create_storage_tools_tab(storage_data)
+        tab_widget.addTab(tools_widget, "🛠️ Storage Tools")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        export_button = QPushButton("💾 Export Data")
+        clear_all_button = QPushButton("🗑️ Clear All Storage")
+        refresh_button = QPushButton("🔄 Refresh")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(clear_all_button)
+        button_layout.addWidget(refresh_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def export_data():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"storage_data_{timestamp}.json"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export Storage Data",
+                filename,
+                "JSON Files (*.json);;Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    export_data = {
+                        'url': base_url,
+                        'timestamp': datetime.now().isoformat(),
+                        'storage_data': storage_data
+                    }
+                    
+                    if file_path.endswith('.json'):
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            json.dump(export_data, f, indent=2, ensure_ascii=False)
+                    else:
+                        # Export as text report
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(self.generate_storage_text_report(export_data))
+                    
+                    self.main_window.status_info.setText(f"✅ Storage data exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        def clear_all_storage():
+            reply = QMessageBox.question(
+                dialog,
+                "Clear All Storage",
+                "Are you sure you want to clear ALL storage data?\n\nThis will remove:\n• All localStorage items\n• All sessionStorage items\n• All cookies\n\nThis action cannot be undone!",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                self.clear_all_browser_storage()
+                dialog.accept()
+                # Re-run the storage analysis
+                browser = self.get_current_browser()
+                if browser:
+                    self.manage_storage(browser)
+        
+        def refresh_storage():
+            dialog.accept()
+            # Re-run the storage analysis
+            browser = self.get_current_browser()
+            if browser:
+                self.manage_storage(browser)
+        
+        # Connect buttons
+        export_button.clicked.connect(export_data)
+        clear_all_button.clicked.connect(clear_all_storage)
+        refresh_button.clicked.connect(refresh_storage)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
+        
+        # Update main window status
+        self.main_window.status_info.setText(f"💾 Storage analysis complete - {total_items} items found")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+    
+    def create_storage_overview_tab(self, storage_data):
+        """Create the overview tab for storage analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QFrame, QScrollArea, QProgressBar)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # Storage Summary
+        summary_frame = QFrame()
+        summary_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px;")
+        summary_layout = QVBoxLayout(summary_frame)
+        
+        summary_title = QLabel("📊 Storage Summary")
+        summary_title.setFont(QFont("Arial", 12, QFont.Bold))
+        summary_layout.addWidget(summary_title)
+        
+        summary = storage_data.get('summary', {})
+        total_size = storage_data.get('totalSize', 0)
+        
+        # Storage type breakdown
+        local_items = summary.get('localStorageItems', 0)
+        session_items = summary.get('sessionStorageItems', 0)
+        cookies_count = summary.get('cookiesCount', 0)
+        
+        summary_layout.addWidget(QLabel(f"🏠 localStorage: {local_items} items"))
+        summary_layout.addWidget(QLabel(f"⏱️ sessionStorage: {session_items} items"))
+        summary_layout.addWidget(QLabel(f"🍪 Cookies: {cookies_count} items"))
+        summary_layout.addWidget(QLabel(f"� PHPa Sessions: {summary.get('phpSessionsCount', 0)} detected"))
+        summary_layout.addWidget(QLabel(f"📏 Total Size: {self.format_storage_size(total_size)}"))
+        
+        scroll_layout.addWidget(summary_frame)
+        
+        # Storage Types Available
+        types_frame = QFrame()
+        types_frame.setStyleSheet("background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 15px;")
+        types_layout = QVBoxLayout(types_frame)
+        
+        types_title = QLabel("🔧 Available Storage APIs")
+        types_title.setFont(QFont("Arial", 12, QFont.Bold))
+        types_layout.addWidget(types_title)
+        
+        # Check which storage APIs are available
+        if summary.get('hasIndexedDB'):
+            types_layout.addWidget(QLabel("✅ IndexedDB - Available for complex data storage"))
+        else:
+            types_layout.addWidget(QLabel("❌ IndexedDB - Not available"))
+        
+        if summary.get('hasWebSQL'):
+            types_layout.addWidget(QLabel("⚠️ WebSQL - Available but deprecated"))
+        else:
+            types_layout.addWidget(QLabel("❌ WebSQL - Not available (deprecated)"))
+        
+        if summary.get('hasCacheStorage'):
+            types_layout.addWidget(QLabel("✅ Cache Storage - Available for offline caching"))
+        else:
+            types_layout.addWidget(QLabel("❌ Cache Storage - Not available"))
+        
+        if summary.get('hasServiceWorker'):
+            types_layout.addWidget(QLabel("✅ Service Worker - Available for background processing"))
+        else:
+            types_layout.addWidget(QLabel("❌ Service Worker - Not available"))
+        
+        if summary.get('hasPHPSessions'):
+            types_layout.addWidget(QLabel("✅ PHP Sessions - Detected on this website"))
+        else:
+            types_layout.addWidget(QLabel("❌ PHP Sessions - Not detected"))
+        
+        scroll_layout.addWidget(types_frame)
+        
+        # Storage Usage Visualization
+        if total_size > 0:
+            usage_frame = QFrame()
+            usage_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px;")
+            usage_layout = QVBoxLayout(usage_frame)
+            
+            usage_title = QLabel("📈 Storage Usage Breakdown")
+            usage_title.setFont(QFont("Arial", 12, QFont.Bold))
+            usage_layout.addWidget(usage_title)
+            
+            # Calculate sizes for each storage type
+            local_storage = storage_data.get('localStorage', {})
+            session_storage = storage_data.get('sessionStorage', {})
+            cookies = storage_data.get('cookies', [])
+            
+            local_size = sum(item.get('size', 0) for item in local_storage.values() if isinstance(item, dict))
+            session_size = sum(item.get('size', 0) for item in session_storage.values() if isinstance(item, dict))
+            cookies_size = sum(cookie.get('size', 0) for cookie in cookies if isinstance(cookie, dict))
+            
+            # Progress bars for visual representation
+            if local_size > 0:
+                local_progress = QProgressBar()
+                local_progress.setRange(0, total_size)
+                local_progress.setValue(local_size)
+                local_progress.setFormat(f"localStorage: {self.format_storage_size(local_size)} ({local_size*100//total_size}%)")
+                usage_layout.addWidget(local_progress)
+            
+            if session_size > 0:
+                session_progress = QProgressBar()
+                session_progress.setRange(0, total_size)
+                session_progress.setValue(session_size)
+                session_progress.setFormat(f"sessionStorage: {self.format_storage_size(session_size)} ({session_size*100//total_size}%)")
+                usage_layout.addWidget(session_progress)
+            
+            if cookies_size > 0:
+                cookies_progress = QProgressBar()
+                cookies_progress.setRange(0, total_size)
+                cookies_progress.setValue(cookies_size)
+                cookies_progress.setFormat(f"Cookies: {self.format_storage_size(cookies_size)} ({cookies_size*100//total_size}%)")
+                usage_layout.addWidget(cookies_progress)
+            
+            scroll_layout.addWidget(usage_frame)
+        
+        # Domain and Security Info
+        security_frame = QFrame()
+        security_frame.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px;")
+        security_layout = QVBoxLayout(security_frame)
+        
+        security_title = QLabel("🔒 Domain & Security Information")
+        security_title.setFont(QFont("Arial", 12, QFont.Bold))
+        security_layout.addWidget(security_title)
+        
+        domain = storage_data.get('domain', 'Unknown')
+        protocol = storage_data.get('protocol', 'Unknown')
+        
+        security_layout.addWidget(QLabel(f"Domain: {domain}"))
+        security_layout.addWidget(QLabel(f"Protocol: {protocol}"))
+        
+        if protocol == 'https:':
+            security_layout.addWidget(QLabel("✅ Secure connection (HTTPS)"))
+        else:
+            security_layout.addWidget(QLabel("⚠️ Insecure connection (HTTP)"))
+        
+        scroll_layout.addWidget(security_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def create_local_storage_tab(self, storage_data):
+        """Create the localStorage tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel, QHBoxLayout, QPushButton, QMessageBox)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header with controls
+        header_layout = QHBoxLayout()
+        
+        header = QLabel("🏠 localStorage Items")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        header_layout.addWidget(header)
+        
+        header_layout.addStretch()
+        
+        clear_local_btn = QPushButton("🗑️ Clear localStorage")
+        clear_local_btn.clicked.connect(lambda: self.clear_storage_type('localStorage'))
+        header_layout.addWidget(clear_local_btn)
+        
+        layout.addLayout(header_layout)
+        
+        # Tree widget for localStorage items
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Key', 'Value Preview', 'Size', 'Type', 'Actions'])
+        tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
+        local_storage = storage_data.get('localStorage', {})
+        
+        if not local_storage or (len(local_storage) == 1 and 'error' in local_storage):
+            no_data_label = QLabel("❌ No localStorage data found or access denied.")
+            no_data_label.setStyleSheet("padding: 20px; background-color: #f8d7da; border-radius: 5px; color: #721c24;")
+            no_data_label.setWordWrap(True)
+            layout.addWidget(no_data_label)
+        else:
+            for key, item_data in local_storage.items():
+                if isinstance(item_data, dict) and 'value' in item_data:
+                    item = QTreeWidgetItem()
+                    item.setText(0, key)
+                    
+                    # Value preview (truncated)
+                    value = str(item_data.get('value', ''))
+                    preview = value[:100] + ('...' if len(value) > 100 else '')
+                    item.setText(1, preview)
+                    
+                    # Size
+                    size = item_data.get('size', 0)
+                    item.setText(2, self.format_storage_size(size))
+                    
+                    # Type detection
+                    try:
+                        import json
+                        json.loads(value)
+                        item.setText(3, "JSON")
+                        item.setBackground(3, QColor(173, 255, 173))  # Light green
+                    except:
+                        if value.startswith('data:'):
+                            item.setText(3, "Data URL")
+                            item.setBackground(3, QColor(255, 255, 173))  # Light yellow
+                        elif len(value) > 1000:
+                            item.setText(3, "Large Text")
+                            item.setBackground(3, QColor(255, 182, 193))  # Light red
+                        else:
+                            item.setText(3, "String")
+                    
+                    item.setText(4, "🗑️ Delete")
+                    
+                    tree.addTopLevelItem(item)
+            
+            # Handle item clicks for actions
+            def on_item_clicked(item, column):
+                if column == 4:  # Actions column
+                    key = item.text(0)
+                    reply = QMessageBox.question(
+                        widget,
+                        "Delete localStorage Item",
+                        f"Are you sure you want to delete the localStorage item '{key}'?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    if reply == QMessageBox.Yes:
+                        self.delete_storage_item('localStorage', key)
+            
+            tree.itemClicked.connect(on_item_clicked)
+            layout.addWidget(tree)
+        
+        return widget
+    
+    def create_session_storage_tab(self, storage_data):
+        """Create the sessionStorage tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel, QHBoxLayout, QPushButton, QMessageBox)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header with controls
+        header_layout = QHBoxLayout()
+        
+        header = QLabel("⏱️ sessionStorage Items")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        header_layout.addWidget(header)
+        
+        header_layout.addStretch()
+        
+        clear_session_btn = QPushButton("🗑️ Clear sessionStorage")
+        clear_session_btn.clicked.connect(lambda: self.clear_storage_type('sessionStorage'))
+        header_layout.addWidget(clear_session_btn)
+        
+        layout.addLayout(header_layout)
+        
+        # Tree widget for sessionStorage items
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Key', 'Value Preview', 'Size', 'Type', 'Actions'])
+        tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
+        session_storage = storage_data.get('sessionStorage', {})
+        
+        if not session_storage or (len(session_storage) == 1 and 'error' in session_storage):
+            no_data_label = QLabel("❌ No sessionStorage data found or access denied.")
+            no_data_label.setStyleSheet("padding: 20px; background-color: #f8d7da; border-radius: 5px; color: #721c24;")
+            no_data_label.setWordWrap(True)
+            layout.addWidget(no_data_label)
+        else:
+            for key, item_data in session_storage.items():
+                if isinstance(item_data, dict) and 'value' in item_data:
+                    item = QTreeWidgetItem()
+                    item.setText(0, key)
+                    
+                    # Value preview (truncated)
+                    value = str(item_data.get('value', ''))
+                    preview = value[:100] + ('...' if len(value) > 100 else '')
+                    item.setText(1, preview)
+                    
+                    # Size
+                    size = item_data.get('size', 0)
+                    item.setText(2, self.format_storage_size(size))
+                    
+                    # Type detection
+                    try:
+                        import json
+                        json.loads(value)
+                        item.setText(3, "JSON")
+                        item.setBackground(3, QColor(173, 255, 173))  # Light green
+                    except:
+                        if value.startswith('data:'):
+                            item.setText(3, "Data URL")
+                            item.setBackground(3, QColor(255, 255, 173))  # Light yellow
+                        elif len(value) > 1000:
+                            item.setText(3, "Large Text")
+                            item.setBackground(3, QColor(255, 182, 193))  # Light red
+                        else:
+                            item.setText(3, "String")
+                    
+                    item.setText(4, "🗑️ Delete")
+                    
+                    tree.addTopLevelItem(item)
+            
+            # Handle item clicks for actions
+            def on_item_clicked(item, column):
+                if column == 4:  # Actions column
+                    key = item.text(0)
+                    reply = QMessageBox.question(
+                        widget,
+                        "Delete sessionStorage Item",
+                        f"Are you sure you want to delete the sessionStorage item '{key}'?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    if reply == QMessageBox.Yes:
+                        self.delete_storage_item('sessionStorage', key)
+            
+            tree.itemClicked.connect(on_item_clicked)
+            layout.addWidget(tree)
+        
+        return widget
+    
+    def create_cookies_tab(self, storage_data):
+        """Create the cookies tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel, QHBoxLayout, QPushButton, QMessageBox)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header with controls
+        header_layout = QHBoxLayout()
+        
+        header = QLabel("🍪 Cookies")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        header_layout.addWidget(header)
+        
+        header_layout.addStretch()
+        
+        clear_cookies_btn = QPushButton("🗑️ Clear All Cookies")
+        clear_cookies_btn.clicked.connect(lambda: self.clear_storage_type('cookies'))
+        header_layout.addWidget(clear_cookies_btn)
+        
+        layout.addLayout(header_layout)
+        
+        # Tree widget for cookies
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Name', 'Value Preview', 'Size', 'Domain', 'Path', 'Security', 'Actions'])
+        tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        
+        cookies = storage_data.get('cookies', [])
+        
+        if not cookies or (len(cookies) == 1 and 'error' in cookies[0]):
+            no_data_label = QLabel("❌ No cookies found or access denied.")
+            no_data_label.setStyleSheet("padding: 20px; background-color: #f8d7da; border-radius: 5px; color: #721c24;")
+            no_data_label.setWordWrap(True)
+            layout.addWidget(no_data_label)
+        else:
+            for cookie in cookies:
+                if isinstance(cookie, dict) and 'name' in cookie:
+                    item = QTreeWidgetItem()
+                    
+                    name = cookie.get('name', '')
+                    value = cookie.get('value', '')
+                    
+                    item.setText(0, name)
+                    
+                    # Value preview (truncated)
+                    preview = value[:50] + ('...' if len(value) > 50 else '')
+                    item.setText(1, preview)
+                    
+                    # Size
+                    size = cookie.get('size', 0)
+                    item.setText(2, self.format_storage_size(size))
+                    
+                    # Domain and Path
+                    item.setText(3, cookie.get('domain', ''))
+                    item.setText(4, cookie.get('path', '/'))
+                    
+                    # Security attributes
+                    security_attrs = []
+                    if cookie.get('secure'):
+                        security_attrs.append('Secure')
+                    if cookie.get('httpOnly'):
+                        security_attrs.append('HttpOnly')
+                    if cookie.get('sameSite') and cookie.get('sameSite') != 'unknown':
+                        security_attrs.append(f"SameSite={cookie.get('sameSite')}")
+                    
+                    security_text = ', '.join(security_attrs) if security_attrs else 'None'
+                    item.setText(5, security_text)
+                    
+                    # Color code based on security
+                    if security_attrs:
+                        item.setBackground(5, QColor(144, 238, 144))  # Light green
+                    else:
+                        item.setBackground(5, QColor(255, 182, 193))  # Light red
+                    
+                    item.setText(6, "🗑️ Delete")
+                    
+                    tree.addTopLevelItem(item)
+            
+            # Handle item clicks for actions
+            def on_item_clicked(item, column):
+                if column == 6:  # Actions column
+                    name = item.text(0)
+                    reply = QMessageBox.question(
+                        widget,
+                        "Delete Cookie",
+                        f"Are you sure you want to delete the cookie '{name}'?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    if reply == QMessageBox.Yes:
+                        self.delete_storage_item('cookies', name)
+            
+            tree.itemClicked.connect(on_item_clicked)
+            layout.addWidget(tree)
+        
+        return widget
+    
+    def create_php_sessions_tab(self, storage_data):
+        """Create the PHP sessions tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel, QHBoxLayout, QPushButton, QMessageBox,
+                                   QTextEdit, QFrame)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor, QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header with info
+        header_frame = QFrame()
+        header_frame.setStyleSheet("background-color: #f0f8ff; border: 1px solid #b8daff; border-radius: 5px; padding: 10px;")
+        header_layout = QVBoxLayout(header_frame)
+        
+        header = QLabel("🐘 PHP Sessions Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px;")
+        header_layout.addWidget(header)
+        
+        info_label = QLabel("PHP sessions are server-side storage mechanisms. Detection is based on cookies, URL parameters, and page analysis.")
+        info_label.setStyleSheet("font-size: 11px; color: #666; font-style: italic;")
+        info_label.setWordWrap(True)
+        header_layout.addWidget(info_label)
+        
+        layout.addWidget(header_frame)
+        
+        php_sessions = storage_data.get('phpSessions', [])
+        
+        if not php_sessions:
+            no_data_frame = QFrame()
+            no_data_frame.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 20px;")
+            no_data_layout = QVBoxLayout(no_data_frame)
+            
+            no_data_title = QLabel("❌ No PHP Sessions Detected")
+            no_data_title.setFont(QFont("Arial", 12, QFont.Bold))
+            no_data_layout.addWidget(no_data_title)
+            
+            no_data_text = QLabel("""
+This could mean:
+• The website doesn't use PHP sessions
+• Sessions are managed server-side without client-side indicators
+• Session cookies are HttpOnly (more secure but not detectable via JavaScript)
+• Custom session management is being used
+
+Common PHP session indicators we look for:
+• PHPSESSID cookie
+• Session-related cookies (names containing 'sess', 'session')
+• Framework-specific session cookies (Laravel, Symfony, etc.)
+• Session IDs in URL parameters
+• PHP session variables in page scripts
+            """)
+            no_data_text.setWordWrap(True)
+            no_data_text.setStyleSheet("color: #856404;")
+            no_data_layout.addWidget(no_data_text)
+            
+            layout.addWidget(no_data_frame)
+        else:
+            # Tree widget for PHP sessions
+            tree = QTreeWidget()
+            tree.setHeaderLabels(['Session ID', 'Detection Method', 'Framework/Type', 'Size', 'Domain', 'Pattern', 'Details'])
+            tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+            tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+            tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+            tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+            tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+            tree.header().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+            tree.header().setSectionResizeMode(6, QHeaderView.Stretch)
+            
+            for session in php_sessions:
+                item = QTreeWidgetItem()
+                
+                # Session ID (truncated for display)
+                session_id = session.get('sessionId', '')
+                if len(session_id) > 20:
+                    display_id = session_id[:10] + '...' + session_id[-10:]
+                else:
+                    display_id = session_id
+                item.setText(0, display_id)
+                
+                # Detection method
+                detection_method = session.get('detected', 'unknown')
+                method_display = {
+                    'cookie-based': '🍪 Cookie',
+                    'url-parameter': '🔗 URL Parameter',
+                    'meta-tag': '📋 Meta Tag',
+                    'server-side-variables': '⚙️ Server Variables',
+                    'framework-cookie': '🏗️ Framework Cookie'
+                }.get(detection_method, detection_method)
+                item.setText(1, method_display)
+                
+                # Framework/Type
+                framework = session.get('framework', '')
+                if framework:
+                    item.setText(2, framework)
+                    # Color code by framework
+                    framework_colors = {
+                        'Laravel': QColor(255, 182, 193),    # Light red
+                        'Symfony': QColor(173, 255, 173),    # Light green
+                        'CodeIgniter': QColor(255, 255, 173), # Light yellow
+                        'WordPress': QColor(173, 216, 230),   # Light blue
+                        'Drupal': QColor(221, 160, 221),     # Light purple
+                        'CakePHP': QColor(255, 218, 185),    # Light orange
+                    }
+                    if framework in framework_colors:
+                        item.setBackground(2, framework_colors[framework])
+                else:
+                    item.setText(2, 'Standard PHP')
+                
+                # Size
+                size = session.get('size', 0)
+                item.setText(3, self.format_storage_size(size))
+                
+                # Domain
+                item.setText(4, session.get('domain', ''))
+                
+                # Pattern
+                pattern = session.get('pattern', '')
+                pattern_display = {
+                    'standard': '📝 Standard',
+                    'url-based': '🔗 URL-based',
+                    'meta-based': '📋 Meta-based',
+                    'script-based': '📜 Script-based',
+                    'framework-based': '🏗️ Framework-based'
+                }.get(pattern, pattern)
+                item.setText(5, pattern_display)
+                
+                # Details
+                details = []
+                if session.get('cookieName'):
+                    details.append(f"Cookie: {session.get('cookieName')}")
+                if session.get('paramName'):
+                    details.append(f"Parameter: {session.get('paramName')}")
+                if session.get('metaName'):
+                    details.append(f"Meta: {session.get('metaName')}")
+                if session.get('note'):
+                    details.append(session.get('note'))
+                
+                item.setText(6, ' | '.join(details))
+                
+                # Color code by detection confidence
+                if detection_method in ['cookie-based', 'framework-cookie']:
+                    item.setBackground(0, QColor(144, 238, 144))  # Light green - high confidence
+                elif detection_method in ['url-parameter', 'meta-tag']:
+                    item.setBackground(0, QColor(255, 255, 0))    # Yellow - medium confidence
+                else:
+                    item.setBackground(0, QColor(255, 182, 193))  # Light red - low confidence
+                
+                tree.addTopLevelItem(item)
+            
+            layout.addWidget(tree)
+            
+            # PHP Session Information
+            info_frame = QFrame()
+            info_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin-top: 10px;")
+            info_layout = QVBoxLayout(info_frame)
+            
+            info_title = QLabel("ℹ️ PHP Session Information")
+            info_title.setFont(QFont("Arial", 12, QFont.Bold))
+            info_layout.addWidget(info_title)
+            
+            info_text = QTextEdit()
+            info_text.setReadOnly(True)
+            info_text.setMaximumHeight(120)
+            info_text.setStyleSheet("font-family: monospace; background-color: #f8f9fa; border: 1px solid #dee2e6;")
+            
+            info_content = []
+            info_content.append("PHP SESSION ANALYSIS:")
+            info_content.append("-" * 25)
+            info_content.append(f"Total sessions detected: {len(php_sessions)}")
+            
+            # Group by detection method
+            methods = {}
+            frameworks = set()
+            for session in php_sessions:
+                method = session.get('detected', 'unknown')
+                methods[method] = methods.get(method, 0) + 1
+                if session.get('framework'):
+                    frameworks.add(session.get('framework'))
+            
+            info_content.append("\nDetection methods:")
+            for method, count in methods.items():
+                info_content.append(f"  {method}: {count}")
+            
+            if frameworks:
+                info_content.append(f"\nFrameworks detected: {', '.join(frameworks)}")
+            
+            info_content.append("\nSecurity Notes:")
+            info_content.append("• HttpOnly cookies are more secure but not detectable via JavaScript")
+            info_content.append("• URL-based sessions are less secure than cookie-based")
+            info_content.append("• Server-side session storage is not directly accessible from client")
+            
+            info_text.setPlainText('\n'.join(info_content))
+            info_layout.addWidget(info_text)
+            
+            layout.addWidget(info_frame)
+        
+        return widget
+    
+    def create_advanced_storage_tab(self, storage_data):
+        """Create the advanced storage tab for IndexedDB, WebSQL, etc."""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QFrame, QScrollArea, QTextEdit)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🔧 Advanced Storage APIs")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # IndexedDB
+        indexeddb_frame = QFrame()
+        indexeddb_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px;")
+        indexeddb_layout = QVBoxLayout(indexeddb_frame)
+        
+        indexeddb_title = QLabel("🗄️ IndexedDB")
+        indexeddb_title.setFont(QFont("Arial", 12, QFont.Bold))
+        indexeddb_layout.addWidget(indexeddb_title)
+        
+        indexeddb_data = storage_data.get('indexedDB', [])
+        if indexeddb_data and indexeddb_data[0].get('available'):
+            indexeddb_layout.addWidget(QLabel("✅ IndexedDB API is available"))
+            indexeddb_layout.addWidget(QLabel("ℹ️ IndexedDB databases require specific names to enumerate"))
+            indexeddb_layout.addWidget(QLabel("💡 Use browser DevTools → Application → Storage → IndexedDB for detailed inspection"))
+        else:
+            indexeddb_layout.addWidget(QLabel("❌ IndexedDB is not available"))
+        
+        scroll_layout.addWidget(indexeddb_frame)
+        
+        # WebSQL
+        websql_frame = QFrame()
+        websql_frame.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px;")
+        websql_layout = QVBoxLayout(websql_frame)
+        
+        websql_title = QLabel("🗃️ WebSQL (Deprecated)")
+        websql_title.setFont(QFont("Arial", 12, QFont.Bold))
+        websql_layout.addWidget(websql_title)
+        
+        websql_data = storage_data.get('webSQL', [])
+        if websql_data and websql_data[0].get('available'):
+            websql_layout.addWidget(QLabel("⚠️ WebSQL is available but deprecated"))
+            websql_layout.addWidget(QLabel("🚫 WebSQL support has been removed from modern browsers"))
+            websql_layout.addWidget(QLabel("💡 Consider migrating to IndexedDB"))
+        else:
+            websql_layout.addWidget(QLabel("❌ WebSQL is not available (expected in modern browsers)"))
+        
+        scroll_layout.addWidget(websql_frame)
+        
+        # Cache Storage
+        cache_frame = QFrame()
+        cache_frame.setStyleSheet("background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 15px;")
+        cache_layout = QVBoxLayout(cache_frame)
+        
+        cache_title = QLabel("📦 Cache Storage")
+        cache_title.setFont(QFont("Arial", 12, QFont.Bold))
+        cache_layout.addWidget(cache_title)
+        
+        cache_data = storage_data.get('cacheStorage', [])
+        if cache_data and cache_data[0].get('available'):
+            cache_layout.addWidget(QLabel("✅ Cache Storage API is available"))
+            cache_layout.addWidget(QLabel("🌐 Used by Service Workers for offline functionality"))
+            cache_layout.addWidget(QLabel("💡 Use browser DevTools → Application → Storage → Cache Storage for inspection"))
+        else:
+            cache_layout.addWidget(QLabel("❌ Cache Storage is not available"))
+        
+        scroll_layout.addWidget(cache_frame)
+        
+        # Service Worker
+        sw_frame = QFrame()
+        sw_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px;")
+        sw_layout = QVBoxLayout(sw_frame)
+        
+        sw_title = QLabel("⚙️ Service Worker")
+        sw_title.setFont(QFont("Arial", 12, QFont.Bold))
+        sw_layout.addWidget(sw_title)
+        
+        sw_data = storage_data.get('serviceWorkerRegistrations', [])
+        if sw_data and sw_data[0].get('available'):
+            sw_layout.addWidget(QLabel("✅ Service Worker API is available"))
+            sw_layout.addWidget(QLabel("🔄 Enables background sync, push notifications, and offline functionality"))
+            sw_layout.addWidget(QLabel("💡 Use browser DevTools → Application → Service Workers for management"))
+        else:
+            sw_layout.addWidget(QLabel("❌ Service Worker is not available"))
+        
+        scroll_layout.addWidget(sw_frame)
+        
+        # Storage Quota
+        quota_frame = QFrame()
+        quota_frame.setStyleSheet("background-color: #f0f8ff; border: 1px solid #b8daff; border-radius: 5px; padding: 15px;")
+        quota_layout = QVBoxLayout(quota_frame)
+        
+        quota_title = QLabel("📊 Storage Quota")
+        quota_title.setFont(QFont("Arial", 12, QFont.Bold))
+        quota_layout.addWidget(quota_title)
+        
+        quota_data = storage_data.get('quota', {})
+        if quota_data.get('available'):
+            quota_layout.addWidget(QLabel("✅ Storage Quota API is available"))
+            quota_layout.addWidget(QLabel("📏 Provides information about storage usage and quota"))
+            quota_layout.addWidget(QLabel("💡 Use navigator.storage.estimate() in console for details"))
+        else:
+            quota_layout.addWidget(QLabel("❌ Storage Quota API is not available"))
+        
+        scroll_layout.addWidget(quota_frame)
+        
+        # Permissions API
+        permissions_frame = QFrame()
+        permissions_frame.setStyleSheet("background-color: #fff5f5; border: 1px solid #ffcccc; border-radius: 5px; padding: 15px;")
+        permissions_layout = QVBoxLayout(permissions_frame)
+        
+        permissions_title = QLabel("🔐 Permissions API")
+        permissions_title.setFont(QFont("Arial", 12, QFont.Bold))
+        permissions_layout.addWidget(permissions_title)
+        
+        permissions_data = storage_data.get('permissions', {})
+        if permissions_data.get('available'):
+            permissions_layout.addWidget(QLabel("✅ Permissions API is available"))
+            permissions_layout.addWidget(QLabel("🔒 Manages permissions for various browser features"))
+            permissions_layout.addWidget(QLabel("💡 Use navigator.permissions.query() in console"))
+        else:
+            permissions_layout.addWidget(QLabel("❌ Permissions API is not available"))
+        
+        scroll_layout.addWidget(permissions_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def create_storage_tools_tab(self, storage_data):
+        """Create the storage tools tab with utilities"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QFrame, QPushButton, QTextEdit, QLineEdit,
+                                   QComboBox, QSpinBox, QCheckBox, QMessageBox)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🛠️ Storage Management Tools")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Storage Cleaner
+        cleaner_frame = QFrame()
+        cleaner_frame.setStyleSheet("background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; padding: 15px;")
+        cleaner_layout = QVBoxLayout(cleaner_frame)
+        
+        cleaner_title = QLabel("🧹 Storage Cleaner")
+        cleaner_title.setFont(QFont("Arial", 12, QFont.Bold))
+        cleaner_layout.addWidget(cleaner_title)
+        
+        # Selective clearing options
+        clear_options_layout = QHBoxLayout()
+        
+        clear_local_btn = QPushButton("🗑️ Clear localStorage")
+        clear_local_btn.clicked.connect(lambda: self.clear_storage_type('localStorage'))
+        clear_options_layout.addWidget(clear_local_btn)
+        
+        clear_session_btn = QPushButton("🗑️ Clear sessionStorage")
+        clear_session_btn.clicked.connect(lambda: self.clear_storage_type('sessionStorage'))
+        clear_options_layout.addWidget(clear_session_btn)
+        
+        clear_cookies_btn = QPushButton("🗑️ Clear Cookies")
+        clear_cookies_btn.clicked.connect(lambda: self.clear_storage_type('cookies'))
+        clear_options_layout.addWidget(clear_cookies_btn)
+        
+        cleaner_layout.addLayout(clear_options_layout)
+        
+        # Clear all button
+        clear_all_btn = QPushButton("🗑️ Clear ALL Storage")
+        clear_all_btn.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 8px;")
+        clear_all_btn.clicked.connect(self.clear_all_browser_storage)
+        cleaner_layout.addWidget(clear_all_btn)
+        
+        layout.addWidget(cleaner_frame)
+        
+        # Storage Inspector
+        inspector_frame = QFrame()
+        inspector_frame.setStyleSheet("background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px; padding: 15px;")
+        inspector_layout = QVBoxLayout(inspector_frame)
+        
+        inspector_title = QLabel("🔍 Storage Inspector")
+        inspector_title.setFont(QFont("Arial", 12, QFont.Bold))
+        inspector_layout.addWidget(inspector_title)
+        
+        # Search functionality
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Search:"))
+        
+        search_input = QLineEdit()
+        search_input.setPlaceholderText("Search keys/values...")
+        search_layout.addWidget(search_input)
+        
+        search_btn = QPushButton("🔍 Search")
+        search_layout.addWidget(search_btn)
+        
+        inspector_layout.addLayout(search_layout)
+        
+        # Search results
+        search_results = QTextEdit()
+        search_results.setReadOnly(True)
+        search_results.setMaximumHeight(150)
+        search_results.setStyleSheet("font-family: monospace; background-color: #f8f9fa;")
+        search_results.setPlainText("Enter a search term to find matching keys or values in storage...")
+        
+        def perform_search():
+            query = search_input.text().lower()
+            if not query:
+                search_results.setPlainText("Please enter a search term.")
+                return
+            
+            results = []
+            results.append(f"Search results for: '{query}'")
+            results.append("=" * 40)
+            
+            # Search localStorage
+            local_storage = storage_data.get('localStorage', {})
+            for key, item_data in local_storage.items():
+                if isinstance(item_data, dict):
+                    value = str(item_data.get('value', ''))
+                    if query in key.lower() or query in value.lower():
+                        results.append(f"localStorage[{key}]: {value[:100]}...")
+            
+            # Search sessionStorage
+            session_storage = storage_data.get('sessionStorage', {})
+            for key, item_data in session_storage.items():
+                if isinstance(item_data, dict):
+                    value = str(item_data.get('value', ''))
+                    if query in key.lower() or query in value.lower():
+                        results.append(f"sessionStorage[{key}]: {value[:100]}...")
+            
+            # Search cookies
+            cookies = storage_data.get('cookies', [])
+            for cookie in cookies:
+                if isinstance(cookie, dict):
+                    name = cookie.get('name', '')
+                    value = cookie.get('value', '')
+                    if query in name.lower() or query in value.lower():
+                        results.append(f"Cookie[{name}]: {value[:100]}...")
+            
+            if len(results) == 2:  # Only header
+                results.append("No matches found.")
+            
+            search_results.setPlainText('\n'.join(results))
+        
+        search_btn.clicked.connect(perform_search)
+        search_input.returnPressed.connect(perform_search)
+        
+        inspector_layout.addWidget(search_results)
+        
+        layout.addWidget(inspector_frame)
+        
+        # Storage Statistics
+        stats_frame = QFrame()
+        stats_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px;")
+        stats_layout = QVBoxLayout(stats_frame)
+        
+        stats_title = QLabel("📊 Storage Statistics")
+        stats_title.setFont(QFont("Arial", 12, QFont.Bold))
+        stats_layout.addWidget(stats_title)
+        
+        # Calculate and display statistics
+        summary = storage_data.get('summary', {})
+        total_size = storage_data.get('totalSize', 0)
+        
+        stats_text = QTextEdit()
+        stats_text.setReadOnly(True)
+        stats_text.setMaximumHeight(120)
+        stats_text.setStyleSheet("font-family: monospace; background-color: #f8f9fa;")
+        
+        stats_content = []
+        stats_content.append("STORAGE STATISTICS:")
+        stats_content.append("-" * 20)
+        stats_content.append(f"localStorage items: {summary.get('localStorageItems', 0)}")
+        stats_content.append(f"sessionStorage items: {summary.get('sessionStorageItems', 0)}")
+        stats_content.append(f"Cookies: {summary.get('cookiesCount', 0)}")
+        stats_content.append(f"PHP Sessions: {summary.get('phpSessionsCount', 0)}")
+        stats_content.append(f"Total size: {self.format_storage_size(total_size)}")
+        stats_content.append(f"Domain: {storage_data.get('domain', 'Unknown')}")
+        stats_content.append(f"Protocol: {storage_data.get('protocol', 'Unknown')}")
+        
+        stats_text.setPlainText('\n'.join(stats_content))
+        stats_layout.addWidget(stats_text)
+        
+        layout.addWidget(stats_frame)
+        
+        layout.addStretch()
+        
+        return widget
+    
+    def format_storage_size(self, size_bytes):
+        """Format storage size in human-readable format"""
+        if size_bytes == 0:
+            return "0 B"
+        
+        units = ['B', 'KB', 'MB', 'GB']
+        size = float(size_bytes)
+        unit_index = 0
+        
+        while size >= 1024 and unit_index < len(units) - 1:
+            size /= 1024
+            unit_index += 1
+        
+        if unit_index == 0:
+            return f"{int(size)} {units[unit_index]}"
+        else:
+            return f"{size:.1f} {units[unit_index]}"
+    
+    def clear_storage_type(self, storage_type):
+        """Clear specific storage type"""
+        from PyQt5.QtWidgets import QMessageBox
+        
+        reply = QMessageBox.question(
+            self.main_window,
+            f"Clear {storage_type}",
+            f"Are you sure you want to clear all {storage_type} data?\n\nThis action cannot be undone!",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            browser = self.get_current_browser()
+            if browser:
+                page = browser.page()
+                
+                if storage_type == 'localStorage':
+                    js_code = "localStorage.clear(); 'localStorage cleared';"
+                elif storage_type == 'sessionStorage':
+                    js_code = "sessionStorage.clear(); 'sessionStorage cleared';"
+                elif storage_type == 'cookies':
+                    js_code = """
+                    document.cookie.split(";").forEach(function(c) { 
+                        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+                    }); 
+                    'Cookies cleared';
+                    """
+                else:
+                    return
+                
+                def on_cleared(result):
+                    self.main_window.status_info.setText(f"✅ {storage_type} cleared successfully")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                
+                page.runJavaScript(js_code, on_cleared)
+    
+    def clear_all_browser_storage(self):
+        """Clear all browser storage"""
+        from PyQt5.QtWidgets import QMessageBox
+        
+        reply = QMessageBox.question(
+            self.main_window,
+            "Clear All Storage",
+            "Are you sure you want to clear ALL storage data?\n\nThis will remove:\n• All localStorage items\n• All sessionStorage items\n• All cookies\n\nThis action cannot be undone!",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            browser = self.get_current_browser()
+            if browser:
+                page = browser.page()
+                
+                js_code = """
+                // Clear localStorage
+                localStorage.clear();
+                
+                // Clear sessionStorage
+                sessionStorage.clear();
+                
+                // Clear cookies
+                document.cookie.split(";").forEach(function(c) { 
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+                });
+                
+                'All storage cleared';
+                """
+                
+                def on_cleared(result):
+                    self.main_window.status_info.setText("✅ All storage cleared successfully")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                
+                page.runJavaScript(js_code, on_cleared)
+    
+    def delete_storage_item(self, storage_type, key):
+        """Delete specific storage item"""
+        browser = self.get_current_browser()
+        if browser:
+            page = browser.page()
+            
+            if storage_type == 'localStorage':
+                js_code = f"localStorage.removeItem('{key}'); 'Item removed from localStorage';"
+            elif storage_type == 'sessionStorage':
+                js_code = f"sessionStorage.removeItem('{key}'); 'Item removed from sessionStorage';"
+            elif storage_type == 'cookies':
+                js_code = f"document.cookie = '{key}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;'; 'Cookie removed';"
+            else:
+                return
+            
+            def on_deleted(result):
+                self.main_window.status_info.setText(f"✅ {key} deleted from {storage_type}")
+                QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+            
+            page.runJavaScript(js_code, on_deleted)
+    
+    def generate_storage_text_report(self, export_data):
+        """Generate a text-based storage report"""
+        lines = []
+        lines.append("BROWSER STORAGE ANALYSIS REPORT")
+        lines.append("=" * 50)
+        lines.append(f"URL: {export_data['url']}")
+        lines.append(f"Analysis Date: {export_data['timestamp']}")
+        lines.append("")
+        
+        storage_data = export_data['storage_data']
+        summary = storage_data.get('summary', {})
+        
+        # Summary
+        lines.append("STORAGE SUMMARY:")
+        lines.append("-" * 20)
+        lines.append(f"localStorage items: {summary.get('localStorageItems', 0)}")
+        lines.append(f"sessionStorage items: {summary.get('sessionStorageItems', 0)}")
+        lines.append(f"Cookies: {summary.get('cookiesCount', 0)}")
+        lines.append(f"PHP Sessions: {summary.get('phpSessionsCount', 0)}")
+        lines.append(f"Total size: {self.format_storage_size(storage_data.get('totalSize', 0))}")
+        lines.append(f"Domain: {storage_data.get('domain', 'Unknown')}")
+        lines.append(f"Protocol: {storage_data.get('protocol', 'Unknown')}")
+        lines.append("")
+        
+        # localStorage details
+        local_storage = storage_data.get('localStorage', {})
+        if local_storage and not ('error' in local_storage):
+            lines.append("LOCALSTORAGE ITEMS:")
+            lines.append("-" * 20)
+            for key, item_data in local_storage.items():
+                if isinstance(item_data, dict):
+                    value = str(item_data.get('value', ''))
+                    size = item_data.get('size', 0)
+                    lines.append(f"Key: {key}")
+                    lines.append(f"Size: {self.format_storage_size(size)}")
+                    lines.append(f"Value: {value[:200]}{'...' if len(value) > 200 else ''}")
+                    lines.append("-" * 10)
+            lines.append("")
+        
+        # sessionStorage details
+        session_storage = storage_data.get('sessionStorage', {})
+        if session_storage and not ('error' in session_storage):
+            lines.append("SESSIONSTORAGE ITEMS:")
+            lines.append("-" * 20)
+            for key, item_data in session_storage.items():
+                if isinstance(item_data, dict):
+                    value = str(item_data.get('value', ''))
+                    size = item_data.get('size', 0)
+                    lines.append(f"Key: {key}")
+                    lines.append(f"Size: {self.format_storage_size(size)}")
+                    lines.append(f"Value: {value[:200]}{'...' if len(value) > 200 else ''}")
+                    lines.append("-" * 10)
+            lines.append("")
+        
+        # Cookies details
+        cookies = storage_data.get('cookies', [])
+        if cookies and not ('error' in cookies[0] if cookies else False):
+            lines.append("COOKIES:")
+            lines.append("-" * 20)
+            for cookie in cookies:
+                if isinstance(cookie, dict):
+                    lines.append(f"Name: {cookie.get('name', '')}")
+                    lines.append(f"Value: {cookie.get('value', '')}")
+                    lines.append(f"Domain: {cookie.get('domain', '')}")
+                    lines.append(f"Path: {cookie.get('path', '')}")
+                    lines.append(f"Size: {self.format_storage_size(cookie.get('size', 0))}")
+                    lines.append("-" * 10)
+            lines.append("")
+        
+        # PHP Sessions details
+        php_sessions = storage_data.get('phpSessions', [])
+        if php_sessions:
+            lines.append("PHP SESSIONS:")
+            lines.append("-" * 20)
+            for session in php_sessions:
+                session_id = session.get('sessionId', '')
+                if len(session_id) > 40:
+                    session_id = session_id[:20] + '...' + session_id[-20:]
+                lines.append(f"Session ID: {session_id}")
+                lines.append(f"Detection: {session.get('detected', 'unknown')}")
+                lines.append(f"Framework: {session.get('framework', 'Standard PHP')}")
+                lines.append(f"Pattern: {session.get('pattern', 'unknown')}")
+                lines.append(f"Size: {self.format_storage_size(session.get('size', 0))}")
+                if session.get('cookieName'):
+                    lines.append(f"Cookie Name: {session.get('cookieName')}")
+                if session.get('note'):
+                    lines.append(f"Note: {session.get('note')}")
+                lines.append("-" * 10)
+            lines.append("")
+        
+        # Advanced storage APIs
+        lines.append("ADVANCED STORAGE APIS:")
+        lines.append("-" * 20)
+        lines.append(f"IndexedDB: {'Available' if summary.get('hasIndexedDB') else 'Not available'}")
+        lines.append(f"WebSQL: {'Available (deprecated)' if summary.get('hasWebSQL') else 'Not available'}")
+        lines.append(f"Cache Storage: {'Available' if summary.get('hasCacheStorage') else 'Not available'}")
+        lines.append(f"Service Worker: {'Available' if summary.get('hasServiceWorker') else 'Not available'}")
+        lines.append(f"PHP Sessions: {'Detected' if summary.get('hasPHPSessions') else 'Not detected'}")
         
         return '\n'.join(lines)
