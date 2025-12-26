@@ -29,7 +29,8 @@ def test_widget_display():
         
         # Check that UI components exist
         assert hasattr(widget, 'file_path_edit')
-        assert hasattr(widget, 'browse_btn')
+        assert hasattr(widget, 'browse_file_btn')
+        assert hasattr(widget, 'browse_folder_btn')
         assert hasattr(widget, 'scan_btn')
         assert hasattr(widget, 'stop_btn')
         assert hasattr(widget, 'progress_bar')
