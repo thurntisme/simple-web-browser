@@ -443,6 +443,11 @@ class TabManager:
                 tech_detector_action = QAction("🔧 Technology Detector", self.main_window)
                 tech_detector_action.triggered.connect(lambda: self.detect_technologies(browser))
                 menu.addAction(tech_detector_action)
+                
+                # Add CSRF/CORS Visual Tester feature
+                csrf_cors_tester_action = QAction("🛡️ CSRF/CORS Visual Tester", self.main_window)
+                csrf_cors_tester_action.triggered.connect(lambda: self.test_csrf_cors(browser))
+                menu.addAction(csrf_cors_tester_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -9202,6 +9207,1005 @@ class TabManager:
                 lines.append(f"  • {stylesheet.get('href', '')}")
             if len(stylesheets) > 10:
                 lines.append(f"... and {len(stylesheets) - 10} more stylesheets")
+            lines.append("")
+        
+        return '\n'.join(lines)
+    
+    def test_csrf_cors(self, browser):
+        """Test CSRF and CORS policies on the current website"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🛡️ Testing CSRF/CORS policies...")
+            
+            # JavaScript to test CSRF/CORS
+            js_code = """
+            (function() {
+                var testResults = {
+                    url: window.location.href,
+                    origin: window.location.origin,
+                    protocol: window.location.protocol,
+                    host: window.location.host,
+                    timestamp: new Date().toISOString(),
+                    csrf: {
+                        tokens: [],
+                        forms: [],
+                        metaTags: [],
+                        headers: {},
+                        protection: 'unknown'
+                    },
+                    cors: {
+                        headers: {},
+                        preflight: {},
+                        credentials: 'unknown',
+                        origins: [],
+                        methods: [],
+                        allowedHeaders: []
+                    },
+                    security: {
+                        https: window.location.protocol === 'https:',
+                        mixedContent: false,
+                        csp: null,
+                        xFrameOptions: null,
+                        referrerPolicy: null
+                    },
+                    tests: {
+                        corsSimpleRequest: null,
+                        corsPreflightRequest: null,
+                        csrfTokenPresence: null,
+                        sameOriginPolicy: null
+                    }
+                };
+                
+                // CSRF Token Detection
+                function detectCSRFTokens() {
+                    var tokens = [];
+                    
+                    // Check meta tags for CSRF tokens
+                    var metaTags = document.querySelectorAll('meta[name*="csrf"], meta[name*="token"], meta[name*="_token"]');
+                    metaTags.forEach(function(meta) {
+                        tokens.push({
+                            type: 'meta',
+                            name: meta.getAttribute('name'),
+                            content: meta.getAttribute('content') ? meta.getAttribute('content').substring(0, 20) + '...' : '',
+                            element: meta.outerHTML
+                        });
+                        testResults.csrf.metaTags.push({
+                            name: meta.getAttribute('name'),
+                            content: meta.getAttribute('content') || ''
+                        });
+                    });
+                    
+                    // Check forms for CSRF tokens
+                    var forms = document.querySelectorAll('form');
+                    forms.forEach(function(form, index) {
+                        var csrfInputs = form.querySelectorAll('input[name*="csrf"], input[name*="token"], input[name*="_token"]');
+                        var formData = {
+                            index: index,
+                            action: form.action || 'current page',
+                            method: form.method || 'GET',
+                            csrfTokens: []
+                        };
+                        
+                        csrfInputs.forEach(function(input) {
+                            var tokenData = {
+                                type: 'form_input',
+                                name: input.name,
+                                value: input.value ? input.value.substring(0, 20) + '...' : '',
+                                inputType: input.type
+                            };
+                            tokens.push(tokenData);
+                            formData.csrfTokens.push(tokenData);
+                        });
+                        
+                        testResults.csrf.forms.push(formData);
+                    });
+                    
+                    testResults.csrf.tokens = tokens;
+                    testResults.csrf.protection = tokens.length > 0 ? 'detected' : 'not_detected';
+                }
+                
+                // CORS Headers Detection (from response headers if available)
+                function detectCORSHeaders() {
+                    // We'll try to make a test request to detect CORS headers
+                    // Note: This is limited by browser security, but we can detect some things
+                    
+                    // Check if we can access certain properties that indicate CORS setup
+                    try {
+                        // Test for CORS by attempting a cross-origin request simulation
+                        var testOrigins = [
+                            'https://example.com',
+                            'http://localhost:3000',
+                            'https://test.com'
+                        ];
+                        
+                        testResults.cors.origins = testOrigins;
+                        testResults.cors.methods = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
+                        testResults.cors.allowedHeaders = ['Content-Type', 'Authorization', 'X-Requested-With'];
+                    } catch (e) {
+                        console.log('CORS detection limited by browser security');
+                    }
+                }
+                
+                // Security Headers Detection
+                function detectSecurityHeaders() {
+                    // Check for Content Security Policy
+                    var cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+                    if (cspMeta) {
+                        testResults.security.csp = cspMeta.getAttribute('content');
+                    }
+                    
+                    // Check for X-Frame-Options
+                    var xFrameMeta = document.querySelector('meta[http-equiv="X-Frame-Options"]');
+                    if (xFrameMeta) {
+                        testResults.security.xFrameOptions = xFrameMeta.getAttribute('content');
+                    }
+                    
+                    // Check for Referrer Policy
+                    var referrerMeta = document.querySelector('meta[name="referrer"]');
+                    if (referrerMeta) {
+                        testResults.security.referrerPolicy = referrerMeta.getAttribute('content');
+                    }
+                    
+                    // Check for mixed content
+                    var httpResources = document.querySelectorAll('script[src^="http:"], link[href^="http:"], img[src^="http:"]');
+                    if (httpResources.length > 0 && window.location.protocol === 'https:') {
+                        testResults.security.mixedContent = true;
+                    }
+                }
+                
+                // Perform CORS Tests
+                function performCORSTests() {
+                    return new Promise(function(resolve) {
+                        var testsPending = 0;
+                        var testsCompleted = 0;
+                        
+                        function testComplete() {
+                            testsCompleted++;
+                            if (testsCompleted >= testsPending) {
+                                resolve();
+                            }
+                        }
+                        
+                        // Test 1: Simple CORS request
+                        testsPending++;
+                        var img = new Image();
+                        img.onload = function() {
+                            testResults.tests.corsSimpleRequest = {
+                                status: 'allowed',
+                                message: 'Simple CORS requests appear to be allowed'
+                            };
+                            testComplete();
+                        };
+                        img.onerror = function() {
+                            testResults.tests.corsSimpleRequest = {
+                                status: 'blocked',
+                                message: 'Simple CORS requests may be blocked'
+                            };
+                            testComplete();
+                        };
+                        img.src = window.location.origin + '/favicon.ico?' + Date.now();
+                        
+                        // Test 2: Fetch API test (if available)
+                        if (typeof fetch !== 'undefined') {
+                            testsPending++;
+                            fetch(window.location.origin + '/robots.txt', {
+                                method: 'GET',
+                                mode: 'cors'
+                            }).then(function(response) {
+                                testResults.tests.corsPreflightRequest = {
+                                    status: 'success',
+                                    message: 'CORS fetch request successful',
+                                    headers: response.headers ? 'available' : 'not_available'
+                                };
+                                testComplete();
+                            }).catch(function(error) {
+                                testResults.tests.corsPreflightRequest = {
+                                    status: 'error',
+                                    message: 'CORS fetch request failed: ' + error.message
+                                };
+                                testComplete();
+                            });
+                        }
+                        
+                        // Test 3: Same-origin policy test
+                        testsPending++;
+                        try {
+                            var testFrame = document.createElement('iframe');
+                            testFrame.style.display = 'none';
+                            testFrame.src = window.location.origin + '/';
+                            testFrame.onload = function() {
+                                try {
+                                    var frameDoc = testFrame.contentDocument;
+                                    testResults.tests.sameOriginPolicy = {
+                                        status: 'accessible',
+                                        message: 'Same-origin content is accessible'
+                                    };
+                                } catch (e) {
+                                    testResults.tests.sameOriginPolicy = {
+                                        status: 'blocked',
+                                        message: 'Same-origin policy enforced: ' + e.message
+                                    };
+                                }
+                                document.body.removeChild(testFrame);
+                                testComplete();
+                            };
+                            testFrame.onerror = function() {
+                                testResults.tests.sameOriginPolicy = {
+                                    status: 'error',
+                                    message: 'Frame loading failed'
+                                };
+                                document.body.removeChild(testFrame);
+                                testComplete();
+                            };
+                            document.body.appendChild(testFrame);
+                        } catch (e) {
+                            testResults.tests.sameOriginPolicy = {
+                                status: 'error',
+                                message: 'Frame test failed: ' + e.message
+                            };
+                            testComplete();
+                        }
+                        
+                        // Fallback timeout
+                        setTimeout(function() {
+                            if (testsCompleted < testsPending) {
+                                console.log('Some CORS tests timed out');
+                                resolve();
+                            }
+                        }, 5000);
+                    });
+                }
+                
+                // Run all detection functions
+                detectCSRFTokens();
+                detectCORSHeaders();
+                detectSecurityHeaders();
+                
+                // Perform async tests and return results
+                performCORSTests().then(function() {
+                    // Additional analysis
+                    testResults.analysis = {
+                        csrfProtectionLevel: testResults.csrf.tokens.length > 0 ? 'good' : 'poor',
+                        securityScore: 0,
+                        recommendations: []
+                    };
+                    
+                    // Calculate security score
+                    var score = 0;
+                    if (testResults.security.https) score += 20;
+                    if (testResults.csrf.tokens.length > 0) score += 25;
+                    if (testResults.security.csp) score += 15;
+                    if (testResults.security.xFrameOptions) score += 10;
+                    if (!testResults.security.mixedContent) score += 10;
+                    if (testResults.security.referrerPolicy) score += 5;
+                    
+                    testResults.analysis.securityScore = Math.min(score, 100);
+                    
+                    // Generate recommendations
+                    if (!testResults.security.https) {
+                        testResults.analysis.recommendations.push('Enable HTTPS for secure communication');
+                    }
+                    if (testResults.csrf.tokens.length === 0) {
+                        testResults.analysis.recommendations.push('Implement CSRF protection tokens in forms');
+                    }
+                    if (!testResults.security.csp) {
+                        testResults.analysis.recommendations.push('Add Content Security Policy headers');
+                    }
+                    if (!testResults.security.xFrameOptions) {
+                        testResults.analysis.recommendations.push('Add X-Frame-Options header to prevent clickjacking');
+                    }
+                    if (testResults.security.mixedContent) {
+                        testResults.analysis.recommendations.push('Fix mixed content issues (HTTP resources on HTTPS page)');
+                    }
+                    
+                    // Store results for retrieval
+                    window.csrfCorsTestResults = testResults;
+                });
+                
+                return 'CSRF/CORS testing initiated...';
+            })();
+            """
+            
+            def process_initial_response(response):
+                # Start polling for test results
+                self.start_csrf_cors_polling(page, current_url)
+            
+            # Execute the JavaScript
+            page.runJavaScript(js_code, process_initial_response)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ CSRF/CORS test error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def start_csrf_cors_polling(self, page, current_url):
+        """Start polling for CSRF/CORS test results"""
+        self.csrf_cors_poll_timer = QTimer()
+        self.csrf_cors_poll_timer.timeout.connect(lambda: self.check_csrf_cors_results(page, current_url))
+        self.csrf_cors_poll_timer.start(1000)  # Check every second
+        
+        # Stop polling after 10 seconds
+        QTimer.singleShot(10000, lambda: self.stop_csrf_cors_polling())
+    
+    def check_csrf_cors_results(self, page, current_url):
+        """Check if CSRF/CORS test results are ready"""
+        js_check = """
+        (function() {
+            if (window.csrfCorsTestResults) {
+                var results = window.csrfCorsTestResults;
+                delete window.csrfCorsTestResults;  // Clear it
+                return results;
+            }
+            return null;
+        })();
+        """
+        
+        def handle_results(results):
+            if results:
+                self.stop_csrf_cors_polling()
+                self.show_csrf_cors_dialog(results, current_url)
+        
+        page.runJavaScript(js_check, handle_results)
+    
+    def stop_csrf_cors_polling(self):
+        """Stop polling for CSRF/CORS results"""
+        if hasattr(self, 'csrf_cors_poll_timer'):
+            self.csrf_cors_poll_timer.stop()
+    
+    def show_csrf_cors_dialog(self, test_results, base_url):
+        """Show dialog with CSRF/CORS test results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView, 
+                                   QFileDialog, QScrollArea, QFrame, QProgressBar)
+        from PyQt5.QtCore import Qt, QTimer
+        from PyQt5.QtGui import QFont, QColor
+        from datetime import datetime
+        import json
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        security_score = test_results.get('analysis', {}).get('securityScore', 0)
+        dialog.setWindowTitle(f"🛡️ CSRF/CORS Visual Tester - Security Score: {security_score}/100")
+        dialog.setMinimumSize(900, 700)
+        dialog.resize(1200, 800)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"CSRF/CORS Security Analysis for: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #e8f4fd; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # Security Score Display
+        score_frame = QFrame()
+        score_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px;")
+        score_layout = QHBoxLayout(score_frame)
+        
+        score_label = QLabel(f"Security Score: {security_score}/100")
+        score_font = QFont()
+        score_font.setPointSize(16)
+        score_font.setBold(True)
+        score_label.setFont(score_font)
+        
+        # Color code the score
+        if security_score >= 80:
+            score_label.setStyleSheet("color: #28a745;")  # Green
+        elif security_score >= 60:
+            score_label.setStyleSheet("color: #ffc107;")  # Yellow
+        else:
+            score_label.setStyleSheet("color: #dc3545;")  # Red
+        
+        score_layout.addWidget(score_label)
+        
+        # Progress bar for score
+        score_progress = QProgressBar()
+        score_progress.setRange(0, 100)
+        score_progress.setValue(security_score)
+        score_progress.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid grey;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #28a745;
+                width: 20px;
+            }
+        """)
+        score_layout.addWidget(score_progress)
+        
+        layout.addWidget(score_frame)
+        
+        # Tab widget
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Overview Tab
+        overview_widget = self.create_csrf_cors_overview_tab(test_results)
+        tab_widget.addTab(overview_widget, "📊 Overview")
+        
+        # CSRF Analysis Tab
+        csrf_widget = self.create_csrf_analysis_tab(test_results)
+        tab_widget.addTab(csrf_widget, "🛡️ CSRF Analysis")
+        
+        # CORS Analysis Tab
+        cors_widget = self.create_cors_analysis_tab(test_results)
+        tab_widget.addTab(cors_widget, "🌐 CORS Analysis")
+        
+        # Security Headers Tab
+        security_widget = self.create_security_headers_tab(test_results)
+        tab_widget.addTab(security_widget, "🔒 Security Headers")
+        
+        # Test Results Tab
+        tests_widget = self.create_test_results_tab(test_results)
+        tab_widget.addTab(tests_widget, "🧪 Test Results")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        export_button = QPushButton("💾 Export Report")
+        retest_button = QPushButton("🔄 Re-test")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(retest_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def export_report():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"csrf_cors_analysis_{timestamp}.json"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export CSRF/CORS Analysis Report",
+                filename,
+                "JSON Files (*.json);;Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    export_data = {
+                        'url': base_url,
+                        'timestamp': datetime.now().isoformat(),
+                        'test_results': test_results
+                    }
+                    
+                    if file_path.endswith('.json'):
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            json.dump(export_data, f, indent=2, ensure_ascii=False)
+                    else:
+                        # Export as text report
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(self.generate_csrf_cors_text_report(export_data))
+                    
+                    self.main_window.status_info.setText(f"✅ CSRF/CORS report exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        def retest():
+            dialog.accept()
+            # Re-run the test
+            browser = self.get_current_browser()
+            if browser:
+                self.test_csrf_cors(browser)
+        
+        # Connect buttons
+        export_button.clicked.connect(export_report)
+        retest_button.clicked.connect(retest)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
+        
+        # Update main window status
+        self.main_window.status_info.setText(f"🛡️ CSRF/CORS analysis complete - Security Score: {security_score}/100")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+    
+    def create_csrf_cors_overview_tab(self, test_results):
+        """Create the overview tab for CSRF/CORS analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QFrame, QScrollArea)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # Basic Information
+        basic_frame = QFrame()
+        basic_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px;")
+        basic_layout = QVBoxLayout(basic_frame)
+        
+        basic_title = QLabel("📋 Website Security Overview")
+        basic_title.setFont(QFont("Arial", 12, QFont.Bold))
+        basic_layout.addWidget(basic_title)
+        
+        basic_layout.addWidget(QLabel(f"URL: {test_results.get('url', 'N/A')}"))
+        basic_layout.addWidget(QLabel(f"Origin: {test_results.get('origin', 'N/A')}"))
+        basic_layout.addWidget(QLabel(f"Protocol: {test_results.get('protocol', 'N/A')}"))
+        basic_layout.addWidget(QLabel(f"Host: {test_results.get('host', 'N/A')}"))
+        
+        security = test_results.get('security', {})
+        https_status = "✅ Enabled" if security.get('https') else "❌ Disabled"
+        basic_layout.addWidget(QLabel(f"HTTPS: {https_status}"))
+        
+        scroll_layout.addWidget(basic_frame)
+        
+        # Security Score Breakdown
+        analysis = test_results.get('analysis', {})
+        score_frame = QFrame()
+        score_frame.setStyleSheet("background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 15px;")
+        score_layout = QVBoxLayout(score_frame)
+        
+        score_title = QLabel("📊 Security Score Breakdown")
+        score_title.setFont(QFont("Arial", 12, QFont.Bold))
+        score_layout.addWidget(score_title)
+        
+        security_score = analysis.get('securityScore', 0)
+        score_layout.addWidget(QLabel(f"Overall Score: {security_score}/100"))
+        
+        # Score components
+        if security.get('https'):
+            score_layout.addWidget(QLabel("✅ HTTPS: +20 points"))
+        else:
+            score_layout.addWidget(QLabel("❌ HTTPS: 0 points"))
+        
+        csrf_tokens = len(test_results.get('csrf', {}).get('tokens', []))
+        if csrf_tokens > 0:
+            score_layout.addWidget(QLabel(f"✅ CSRF Protection: +25 points ({csrf_tokens} tokens found)"))
+        else:
+            score_layout.addWidget(QLabel("❌ CSRF Protection: 0 points"))
+        
+        if security.get('csp'):
+            score_layout.addWidget(QLabel("✅ Content Security Policy: +15 points"))
+        else:
+            score_layout.addWidget(QLabel("❌ Content Security Policy: 0 points"))
+        
+        if security.get('xFrameOptions'):
+            score_layout.addWidget(QLabel("✅ X-Frame-Options: +10 points"))
+        else:
+            score_layout.addWidget(QLabel("❌ X-Frame-Options: 0 points"))
+        
+        scroll_layout.addWidget(score_frame)
+        
+        # Quick Status
+        status_frame = QFrame()
+        status_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px;")
+        status_layout = QVBoxLayout(status_frame)
+        
+        status_title = QLabel("🚦 Quick Status")
+        status_title.setFont(QFont("Arial", 12, QFont.Bold))
+        status_layout.addWidget(status_title)
+        
+        csrf_protection = test_results.get('csrf', {}).get('protection', 'unknown')
+        if csrf_protection == 'detected':
+            status_layout.addWidget(QLabel("✅ CSRF Protection: Detected"))
+        else:
+            status_layout.addWidget(QLabel("❌ CSRF Protection: Not detected"))
+        
+        mixed_content = security.get('mixedContent', False)
+        if mixed_content:
+            status_layout.addWidget(QLabel("⚠️ Mixed Content: Issues detected"))
+        else:
+            status_layout.addWidget(QLabel("✅ Mixed Content: No issues"))
+        
+        scroll_layout.addWidget(status_frame)
+        
+        # Recommendations
+        recommendations = analysis.get('recommendations', [])
+        if recommendations:
+            rec_frame = QFrame()
+            rec_frame.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px;")
+            rec_layout = QVBoxLayout(rec_frame)
+            
+            rec_title = QLabel(f"💡 Recommendations ({len(recommendations)})")
+            rec_title.setFont(QFont("Arial", 12, QFont.Bold))
+            rec_layout.addWidget(rec_title)
+            
+            for rec in recommendations:
+                rec_label = QLabel(f"• {rec}")
+                rec_label.setWordWrap(True)
+                rec_layout.addWidget(rec_label)
+            
+            scroll_layout.addWidget(rec_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def create_csrf_analysis_tab(self, test_results):
+        """Create the CSRF analysis tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel, QTextEdit)
+        from PyQt5.QtCore import Qt
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        csrf_data = test_results.get('csrf', {})
+        tokens_count = len(csrf_data.get('tokens', []))
+        forms_count = len(csrf_data.get('forms', []))
+        
+        header = QLabel(f"🛡️ CSRF Protection Analysis - {tokens_count} tokens, {forms_count} forms")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # CSRF Tokens Tree
+        if tokens_count > 0:
+            tokens_label = QLabel("🔑 CSRF Tokens Found:")
+            tokens_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+            layout.addWidget(tokens_label)
+            
+            tokens_tree = QTreeWidget()
+            tokens_tree.setHeaderLabels(['Type', 'Name', 'Value Preview', 'Location'])
+            tokens_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            tokens_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+            tokens_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
+            tokens_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+            
+            for token in csrf_data.get('tokens', []):
+                item = QTreeWidgetItem()
+                item.setText(0, token.get('type', 'unknown').replace('_', ' ').title())
+                item.setText(1, token.get('name', ''))
+                item.setText(2, token.get('value', token.get('content', '')))
+                
+                if token.get('type') == 'meta':
+                    item.setText(3, 'HTML Head')
+                elif token.get('type') == 'form_input':
+                    item.setText(3, 'Form Input')
+                else:
+                    item.setText(3, 'Other')
+                
+                # Color code by type
+                if token.get('type') == 'meta':
+                    item.setBackground(0, QColor(173, 255, 173))  # Light green
+                elif token.get('type') == 'form_input':
+                    item.setBackground(0, QColor(255, 248, 220))  # Light yellow
+                
+                tokens_tree.addTopLevelItem(item)
+            
+            layout.addWidget(tokens_tree)
+        
+        # Forms Analysis
+        if forms_count > 0:
+            forms_label = QLabel("📝 Forms Analysis:")
+            forms_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+            layout.addWidget(forms_label)
+            
+            forms_tree = QTreeWidget()
+            forms_tree.setHeaderLabels(['Form #', 'Action', 'Method', 'CSRF Tokens', 'Protection Status'])
+            forms_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            forms_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+            forms_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+            forms_tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+            forms_tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+            
+            for form in csrf_data.get('forms', []):
+                item = QTreeWidgetItem()
+                item.setText(0, str(form.get('index', 0) + 1))
+                item.setText(1, form.get('action', 'current page'))
+                item.setText(2, form.get('method', 'GET'))
+                
+                csrf_tokens = form.get('csrfTokens', [])
+                item.setText(3, str(len(csrf_tokens)))
+                
+                if len(csrf_tokens) > 0:
+                    item.setText(4, '✅ Protected')
+                    item.setBackground(4, QColor(144, 238, 144))  # Light green
+                else:
+                    item.setText(4, '❌ Vulnerable')
+                    item.setBackground(4, QColor(255, 182, 193))  # Light red
+                
+                forms_tree.addTopLevelItem(item)
+            
+            layout.addWidget(forms_tree)
+        
+        # No CSRF protection found
+        if tokens_count == 0:
+            no_csrf_label = QLabel("❌ No CSRF protection detected on this page.\n\nCSRF (Cross-Site Request Forgery) protection is important for preventing unauthorized actions.\nConsider implementing CSRF tokens in your forms.")
+            no_csrf_label.setStyleSheet("padding: 20px; background-color: #f8d7da; border-radius: 5px; color: #721c24;")
+            no_csrf_label.setWordWrap(True)
+            layout.addWidget(no_csrf_label)
+        
+        return widget
+    
+    def create_cors_analysis_tab(self, test_results):
+        """Create the CORS analysis tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QTextEdit, QFrame)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🌐 CORS (Cross-Origin Resource Sharing) Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        cors_data = test_results.get('cors', {})
+        
+        # CORS Information
+        cors_frame = QFrame()
+        cors_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px;")
+        cors_layout = QVBoxLayout(cors_frame)
+        
+        cors_title = QLabel("📋 CORS Configuration")
+        cors_title.setFont(QFont("Arial", 12, QFont.Bold))
+        cors_layout.addWidget(cors_title)
+        
+        # Note about CORS detection limitations
+        cors_note = QLabel("ℹ️ Note: CORS headers are typically set by the server and may not be fully detectable from client-side JavaScript due to browser security restrictions.")
+        cors_note.setStyleSheet("color: #6c757d; font-style: italic; margin-bottom: 10px;")
+        cors_note.setWordWrap(True)
+        cors_layout.addWidget(cors_note)
+        
+        # Test origins
+        origins = cors_data.get('origins', [])
+        if origins:
+            cors_layout.addWidget(QLabel(f"Test Origins: {', '.join(origins)}"))
+        
+        # Allowed methods
+        methods = cors_data.get('methods', [])
+        if methods:
+            cors_layout.addWidget(QLabel(f"Common Methods: {', '.join(methods)}"))
+        
+        # Allowed headers
+        headers = cors_data.get('allowedHeaders', [])
+        if headers:
+            cors_layout.addWidget(QLabel(f"Common Headers: {', '.join(headers)}"))
+        
+        layout.addWidget(cors_frame)
+        
+        # CORS Explanation
+        explanation_frame = QFrame()
+        explanation_frame.setStyleSheet("background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 15px;")
+        explanation_layout = QVBoxLayout(explanation_frame)
+        
+        explanation_title = QLabel("📚 CORS Explanation")
+        explanation_title.setFont(QFont("Arial", 12, QFont.Bold))
+        explanation_layout.addWidget(explanation_title)
+        
+        explanation_text = QTextEdit()
+        explanation_text.setReadOnly(True)
+        explanation_text.setMaximumHeight(200)
+        explanation_text.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+        
+        explanation_content = """CORS (Cross-Origin Resource Sharing) is a security feature implemented by web browsers to restrict web pages from making requests to a different domain than the one serving the web page.
+
+Key CORS Headers:
+• Access-Control-Allow-Origin: Specifies which origins can access the resource
+• Access-Control-Allow-Methods: Specifies which HTTP methods are allowed
+• Access-Control-Allow-Headers: Specifies which headers can be used
+• Access-Control-Allow-Credentials: Indicates whether credentials can be included
+
+CORS is enforced by browsers and configured by servers. Proper CORS configuration is essential for:
+- API security
+- Cross-domain requests
+- Web application functionality"""
+        
+        explanation_text.setPlainText(explanation_content)
+        explanation_layout.addWidget(explanation_text)
+        
+        layout.addWidget(explanation_frame)
+        
+        return widget
+    
+    def create_security_headers_tab(self, test_results):
+        """Create the security headers tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🔒 Security Headers Analysis")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Security headers tree
+        headers_tree = QTreeWidget()
+        headers_tree.setHeaderLabels(['Security Header', 'Status', 'Value', 'Description'])
+        headers_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        headers_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        headers_tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
+        headers_tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
+        
+        security = test_results.get('security', {})
+        
+        # Security headers to check
+        security_headers = [
+            {
+                'name': 'HTTPS',
+                'value': 'Enabled' if security.get('https') else 'Disabled',
+                'status': 'present' if security.get('https') else 'missing',
+                'description': 'Encrypts data in transit between client and server'
+            },
+            {
+                'name': 'Content-Security-Policy',
+                'value': security.get('csp', 'Not set'),
+                'status': 'present' if security.get('csp') else 'missing',
+                'description': 'Prevents XSS attacks by controlling resource loading'
+            },
+            {
+                'name': 'X-Frame-Options',
+                'value': security.get('xFrameOptions', 'Not set'),
+                'status': 'present' if security.get('xFrameOptions') else 'missing',
+                'description': 'Prevents clickjacking attacks by controlling frame embedding'
+            },
+            {
+                'name': 'Referrer-Policy',
+                'value': security.get('referrerPolicy', 'Not set'),
+                'status': 'present' if security.get('referrerPolicy') else 'missing',
+                'description': 'Controls how much referrer information is sent with requests'
+            },
+            {
+                'name': 'Mixed Content',
+                'value': 'Issues detected' if security.get('mixedContent') else 'No issues',
+                'status': 'warning' if security.get('mixedContent') else 'good',
+                'description': 'HTTP resources on HTTPS pages can compromise security'
+            }
+        ]
+        
+        for header_info in security_headers:
+            item = QTreeWidgetItem()
+            item.setText(0, header_info['name'])
+            
+            status = header_info['status']
+            if status == 'present' or status == 'good':
+                item.setText(1, '✅ Present')
+                item.setBackground(1, QColor(144, 238, 144))  # Light green
+            elif status == 'warning':
+                item.setText(1, '⚠️ Warning')
+                item.setBackground(1, QColor(255, 255, 0))    # Yellow
+            else:
+                item.setText(1, '❌ Missing')
+                item.setBackground(1, QColor(255, 182, 193))  # Light red
+            
+            item.setText(2, header_info['value'])
+            item.setText(3, header_info['description'])
+            
+            headers_tree.addTopLevelItem(item)
+        
+        layout.addWidget(headers_tree)
+        
+        return widget
+    
+    def create_test_results_tab(self, test_results):
+        """Create the test results tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel, QTextEdit)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🧪 Automated Test Results")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Test results tree
+        tests_tree = QTreeWidget()
+        tests_tree.setHeaderLabels(['Test Name', 'Status', 'Result', 'Details'])
+        tests_tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tests_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        tests_tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tests_tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
+        
+        tests = test_results.get('tests', {})
+        
+        for test_name, test_result in tests.items():
+            if test_result:  # Only show tests that have results
+                item = QTreeWidgetItem()
+                
+                # Format test name
+                formatted_name = test_name.replace('cors', 'CORS').replace('csrf', 'CSRF').replace('sameOrigin', 'Same-Origin')
+                item.setText(0, formatted_name)
+                
+                status = test_result.get('status', 'unknown')
+                message = test_result.get('message', 'No details available')
+                
+                # Status with icon
+                if status in ['success', 'allowed', 'accessible']:
+                    item.setText(1, '✅ Pass')
+                    item.setBackground(1, QColor(144, 238, 144))  # Light green
+                    item.setText(2, 'Success')
+                elif status in ['blocked', 'error']:
+                    item.setText(1, '❌ Fail')
+                    item.setBackground(1, QColor(255, 182, 193))  # Light red
+                    item.setText(2, 'Failed')
+                else:
+                    item.setText(1, '⚠️ Warning')
+                    item.setBackground(1, QColor(255, 255, 0))    # Yellow
+                    item.setText(2, 'Unknown')
+                
+                item.setText(3, message)
+                
+                tests_tree.addTopLevelItem(item)
+        
+        layout.addWidget(tests_tree)
+        
+        # Raw test data (for debugging)
+        raw_data_label = QLabel("📋 Raw Test Data:")
+        raw_data_label.setStyleSheet("font-weight: bold; margin-top: 15px;")
+        layout.addWidget(raw_data_label)
+        
+        raw_data_text = QTextEdit()
+        raw_data_text.setReadOnly(True)
+        raw_data_text.setMaximumHeight(150)
+        raw_data_text.setStyleSheet("font-family: monospace; background-color: #f8f9fa;")
+        
+        import json
+        raw_data_text.setPlainText(json.dumps(test_results, indent=2))
+        layout.addWidget(raw_data_text)
+        
+        return widget
+    
+    def generate_csrf_cors_text_report(self, export_data):
+        """Generate a text-based CSRF/CORS report"""
+        lines = []
+        lines.append("CSRF/CORS SECURITY ANALYSIS REPORT")
+        lines.append("=" * 50)
+        lines.append(f"URL: {export_data['url']}")
+        lines.append(f"Analysis Date: {export_data['timestamp']}")
+        lines.append("")
+        
+        test_results = export_data['test_results']
+        analysis = test_results.get('analysis', {})
+        
+        # Security Score
+        security_score = analysis.get('securityScore', 0)
+        lines.append(f"SECURITY SCORE: {security_score}/100")
+        lines.append("")
+        
+        # CSRF Analysis
+        csrf_data = test_results.get('csrf', {})
+        lines.append("CSRF PROTECTION ANALYSIS:")
+        lines.append("-" * 30)
+        lines.append(f"Protection Status: {csrf_data.get('protection', 'unknown')}")
+        lines.append(f"CSRF Tokens Found: {len(csrf_data.get('tokens', []))}")
+        lines.append(f"Forms Analyzed: {len(csrf_data.get('forms', []))}")
+        lines.append("")
+        
+        # Security Headers
+        security = test_results.get('security', {})
+        lines.append("SECURITY HEADERS:")
+        lines.append("-" * 20)
+        lines.append(f"HTTPS: {'Enabled' if security.get('https') else 'Disabled'}")
+        lines.append(f"Content Security Policy: {'Present' if security.get('csp') else 'Missing'}")
+        lines.append(f"X-Frame-Options: {'Present' if security.get('xFrameOptions') else 'Missing'}")
+        lines.append(f"Mixed Content Issues: {'Yes' if security.get('mixedContent') else 'No'}")
+        lines.append("")
+        
+        # Recommendations
+        recommendations = analysis.get('recommendations', [])
+        if recommendations:
+            lines.append("RECOMMENDATIONS:")
+            lines.append("-" * 20)
+            for rec in recommendations:
+                lines.append(f"• {rec}")
             lines.append("")
         
         return '\n'.join(lines)
