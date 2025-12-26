@@ -466,6 +466,13 @@ class MainWindow(QMainWindow):
         speed_test_action.triggered.connect(self.show_speed_test_tool)
         tools_menu.addAction(speed_test_action)
         
+        # Color Picker Tool action
+        color_picker_action = QAction("🎨 Color Picker", self)
+        color_picker_action.setShortcut("Ctrl+Shift+C")
+        color_picker_action.setStatusTip("Advanced color picker and palette generator")
+        color_picker_action.triggered.connect(self.show_color_picker_tool)
+        tools_menu.addAction(color_picker_action)
+        
         tools_menu.addSeparator()
         
         # Water Reminder action
@@ -984,6 +991,17 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.speed_test_dialog.raise_()
             self.speed_test_dialog.activateWindow()
+    
+    def show_color_picker_tool(self):
+        """Show color picker dialog"""
+        if not hasattr(self, 'color_picker_dialog') or self.color_picker_dialog is None or not self.color_picker_dialog.isVisible():
+            from color_picker_tool import ColorPickerDialog
+            self.color_picker_dialog = ColorPickerDialog(self)
+            self.color_picker_dialog.show()
+        else:
+            # Bring existing dialog to front
+            self.color_picker_dialog.raise_()
+            self.color_picker_dialog.activateWindow()
     
     def show_water_reminder(self):
         """Show water reminder dialog"""
