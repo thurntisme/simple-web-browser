@@ -548,134 +548,7 @@ class MainWindow(QMainWindow):
         quit_action.setStatusTip("Exit the application")
         quit_action.triggered.connect(self.quit_application)
         help_menu.addAction(quit_action)
-        
-        # Add browser mode dropdown to the right side of menu bar
-        self.setup_browser_mode_dropdown()
     
-    def setup_browser_mode_dropdown(self):
-        """Setup browser mode dropdown in menu bar"""
-        # Create a widget to hold the dropdown
-        mode_widget = QWidget()
-        mode_layout = QHBoxLayout(mode_widget)
-        mode_layout.setContentsMargins(10, 0, 10, 0)
-        
-        # Mode label
-        mode_label = QLabel("Mode:")
-        mode_label.setStyleSheet("QLabel { color: #666; font-weight: bold; }")
-        mode_layout.addWidget(mode_label)
-        
-        # Mode dropdown
-        self.mode_dropdown = QComboBox()
-        self.mode_dropdown.addItem("🌐 Web Browser", "web")
-        self.mode_dropdown.addItem("🔧 API Tester", "api")
-        self.mode_dropdown.addItem("💻 Command Line", "cmd")
-        self.mode_dropdown.addItem("📄 PDF Reader", "pdf")
-        self.mode_dropdown.setCurrentIndex(0)  # Default to web mode
-        self.mode_dropdown.setMinimumWidth(140)  # Increased width for new option
-        self.update_dropdown_style()
-        self.mode_dropdown.currentTextChanged.connect(self.on_mode_changed)
-        mode_layout.addWidget(self.mode_dropdown)
-        
-        # Add the widget to the right side of the menu bar
-        self.menuBar().setCornerWidget(mode_widget, Qt.TopRightCorner)
-    
-    def update_dropdown_style(self):
-        """Update dropdown styling based on current theme"""
-        if hasattr(styles, 'current_theme') and styles.current_theme == "dark":
-            # Dark theme styling
-            self.mode_dropdown.setStyleSheet("""
-                QComboBox {
-                    padding: 4px 8px;
-                    border: 1px solid #555;
-                    border-radius: 4px;
-                    background-color: #2c3e50;
-                    color: #ecf0f1;
-                    font-weight: bold;
-                }
-                QComboBox:hover {
-                    border: 1px solid #7f8c8d;
-                    background-color: #34495e;
-                }
-                QComboBox::drop-down {
-                    border: none;
-                    width: 20px;
-                }
-                QComboBox::down-arrow {
-                    image: none;
-                    border-left: 4px solid transparent;
-                    border-right: 4px solid transparent;
-                    border-top: 4px solid #bdc3c7;
-                    margin-right: 4px;
-                }
-                QComboBox QAbstractItemView {
-                    background-color: #2c3e50;
-                    color: #ecf0f1;
-                    border: 1px solid #555;
-                    selection-background-color: #34495e;
-                    selection-color: #ecf0f1;
-                    outline: none;
-                }
-                QComboBox QAbstractItemView::item {
-                    padding: 4px 8px;
-                    color: #ecf0f1;
-                }
-                QComboBox QAbstractItemView::item:hover {
-                    background-color: #34495e;
-                    color: #ecf0f1;
-                }
-                QComboBox QAbstractItemView::item:selected {
-                    background-color: #34495e;
-                    color: #ecf0f1;
-                }
-            """)
-        else:
-            # Light theme styling
-            self.mode_dropdown.setStyleSheet("""
-                QComboBox {
-                    padding: 4px 8px;
-                    border: 1px solid #ccc;
-                    border-radius: 4px;
-                    background-color: white;
-                    color: #333;
-                    font-weight: bold;
-                }
-                QComboBox:hover {
-                    border: 1px solid #999;
-                    background-color: #f8f9fa;
-                }
-                QComboBox::drop-down {
-                    border: none;
-                    width: 20px;
-                }
-                QComboBox::down-arrow {
-                    image: none;
-                    border-left: 4px solid transparent;
-                    border-right: 4px solid transparent;
-                    border-top: 4px solid #666;
-                    margin-right: 4px;
-                }
-                QComboBox QAbstractItemView {
-                    background-color: white;
-                    color: #333;
-                    border: 1px solid #ccc;
-                    selection-background-color: #e3f2fd;
-                    selection-color: #333;
-                    outline: none;
-                }
-                QComboBox QAbstractItemView::item {
-                    padding: 4px 8px;
-                    color: #333;
-                }
-                QComboBox QAbstractItemView::item:hover {
-                    background-color: #e3f2fd;
-                    color: #333;
-                }
-                QComboBox QAbstractItemView::item:selected {
-                    background-color: #e3f2fd;
-                    color: #333;
-                }
-            """)
-
     def load_initial_page(self):
         """Load home page (welcome or custom URL)"""
         use_welcome = self.config_manager.get("use_welcome_page", True)
@@ -731,109 +604,6 @@ class MainWindow(QMainWindow):
         theme_name = "Light" if new_theme == "light" else "Dark"
         self.status_info.setText(f"Switched to {theme_name} theme")
     
-    def on_mode_changed(self, mode_text):
-        """Handle browser mode change from dropdown"""
-        if "API Tester" in mode_text:
-            # Switch to API mode
-            self.api_mode_enabled = True
-            self.cmd_mode_enabled = False
-            self.pdf_mode_enabled = False
-            self.status_info.setText("API Mode: Ready for testing")
-            
-            # Hide navigation toolbar (home, reload, URL bar)
-            self.navigation_toolbar.setVisible(False)
-            
-            # Hide top bar (sidebar toggle and title) in non-web modes
-            self.top_bar.setVisible(False)
-            
-            # Hide sidebar in non-web modes
-            if self.sidebar_widget:
-                self.sidebar_widget.setVisible(False)
-            
-            # Store current web tabs and remove them
-            self.store_and_remove_web_tabs()
-            
-            # Remove other mode tabs
-            self.remove_cmd_tabs()
-            self.remove_pdf_tabs()
-            
-            # Add API tab
-            self.add_api_tab()
-        elif "Command Line" in mode_text:
-            # Switch to command line mode
-            self.cmd_mode_enabled = True
-            self.api_mode_enabled = False
-            self.pdf_mode_enabled = False
-            self.status_info.setText("Command Line Mode: Ready for terminal commands")
-            
-            # Hide navigation toolbar
-            self.navigation_toolbar.setVisible(False)
-            
-            # Hide top bar (sidebar toggle and title) in non-web modes
-            self.top_bar.setVisible(False)
-            
-            # Hide sidebar in non-web modes
-            if self.sidebar_widget:
-                self.sidebar_widget.setVisible(False)
-            
-            # Store current web tabs and remove them
-            self.store_and_remove_web_tabs()
-            
-            # Remove other mode tabs
-            self.remove_api_tabs()
-            self.remove_pdf_tabs()
-            
-            # Add command line tab
-            self.add_cmd_tab()
-        elif "PDF Reader" in mode_text:
-            # Switch to PDF reader mode
-            self.pdf_mode_enabled = True
-            self.api_mode_enabled = False
-            self.cmd_mode_enabled = False
-            self.status_info.setText("PDF Mode: Ready for document viewing")
-            
-            # Hide navigation toolbar
-            self.navigation_toolbar.setVisible(False)
-            
-            # Hide top bar (sidebar toggle and title) in non-web modes
-            self.top_bar.setVisible(False)
-            
-            # Hide sidebar in non-web modes
-            if self.sidebar_widget:
-                self.sidebar_widget.setVisible(False)
-            
-            # Store current web tabs and remove them
-            self.store_and_remove_web_tabs()
-            
-            # Remove other mode tabs
-            self.remove_api_tabs()
-            self.remove_cmd_tabs()
-            
-            # Add PDF reader tab
-            self.add_pdf_tab()
-        else:
-            # Switch to web mode
-            self.api_mode_enabled = False
-            self.cmd_mode_enabled = False
-            self.pdf_mode_enabled = False
-            self.status_info.setText("Web Mode: Ready for browsing")
-            
-            # Show navigation toolbar
-            self.navigation_toolbar.setVisible(True)
-            
-            # Show top bar (sidebar toggle and title) in web mode
-            self.top_bar.setVisible(True)
-            
-            # Show sidebar only in web mode
-            if self.sidebar_widget:
-                self.sidebar_widget.setVisible(self.sidebar_visible)
-            
-            # Remove special mode tabs and restore web tabs
-            self.remove_api_tabs()
-            self.remove_cmd_tabs()
-            self.remove_pdf_tabs()
-            self.restore_web_tabs()
-    
     def toggle_api_mode(self):
         """Toggle API testing mode (for backward compatibility)"""
         if hasattr(self, 'web_mode_action') and self.web_mode_action.isChecked():
@@ -843,27 +613,111 @@ class MainWindow(QMainWindow):
     
     def switch_to_pdf_mode(self):
         """Switch to PDF reader mode"""
-        if hasattr(self, 'pdf_mode_action'):
-            self.pdf_mode_action.setChecked(True)
-        self.on_mode_changed("📄 PDF Reader")
+        # Switch to PDF reader mode
+        self.pdf_mode_enabled = True
+        self.api_mode_enabled = False
+        self.cmd_mode_enabled = False
+        self.status_info.setText("PDF Mode: Ready for document viewing")
+        
+        # Hide navigation toolbar
+        self.navigation_toolbar.setVisible(False)
+        
+        # Hide top bar (sidebar toggle and title) in non-web modes
+        self.top_bar.setVisible(False)
+        
+        # Hide sidebar in non-web modes
+        if self.sidebar_widget:
+            self.sidebar_widget.setVisible(False)
+        
+        # Store current web tabs and remove them
+        self.store_and_remove_web_tabs()
+        
+        # Remove other mode tabs
+        self.remove_api_tabs()
+        self.remove_cmd_tabs()
+        
+        # Add PDF reader tab
+        self.add_pdf_tab()
     
     def switch_to_api_mode(self):
         """Switch to API testing mode"""
-        if hasattr(self, 'api_mode_action'):
-            self.api_mode_action.setChecked(True)
-        self.on_mode_changed("🔧 API Tester")
+        # Switch to API mode
+        self.api_mode_enabled = True
+        self.cmd_mode_enabled = False
+        self.pdf_mode_enabled = False
+        self.status_info.setText("API Mode: Ready for testing")
+        
+        # Hide navigation toolbar (home, reload, URL bar)
+        self.navigation_toolbar.setVisible(False)
+        
+        # Hide top bar (sidebar toggle and title) in non-web modes
+        self.top_bar.setVisible(False)
+        
+        # Hide sidebar in non-web modes
+        if self.sidebar_widget:
+            self.sidebar_widget.setVisible(False)
+        
+        # Store current web tabs and remove them
+        self.store_and_remove_web_tabs()
+        
+        # Remove other mode tabs
+        self.remove_cmd_tabs()
+        self.remove_pdf_tabs()
+        
+        # Add API tab
+        self.add_api_tab()
     
     def switch_to_cmd_mode(self):
         """Switch to command line mode"""
-        if hasattr(self, 'cmd_mode_action'):
-            self.cmd_mode_action.setChecked(True)
-        self.on_mode_changed("💻 Command Line")
+        # Switch to command line mode
+        self.cmd_mode_enabled = True
+        self.api_mode_enabled = False
+        self.pdf_mode_enabled = False
+        self.status_info.setText("Command Line Mode: Ready for terminal commands")
+        
+        # Hide navigation toolbar
+        self.navigation_toolbar.setVisible(False)
+        
+        # Hide top bar (sidebar toggle and title) in non-web modes
+        self.top_bar.setVisible(False)
+        
+        # Hide sidebar in non-web modes
+        if self.sidebar_widget:
+            self.sidebar_widget.setVisible(False)
+        
+        # Store current web tabs and remove them
+        self.store_and_remove_web_tabs()
+        
+        # Remove other mode tabs
+        self.remove_api_tabs()
+        self.remove_pdf_tabs()
+        
+        # Add command line tab
+        self.add_cmd_tab()
     
     def switch_to_web_mode(self):
         """Switch to web browser mode"""
-        if hasattr(self, 'web_mode_action'):
-            self.web_mode_action.setChecked(True)
-        self.on_mode_changed("🌐 Web Browser")
+        # Switch to web mode
+        self.api_mode_enabled = False
+        self.cmd_mode_enabled = False
+        self.pdf_mode_enabled = False
+        self.status_info.setText("Web Mode: Ready for browsing")
+        
+        # Show navigation toolbar
+        self.navigation_toolbar.setVisible(True)
+        
+        # Show top bar (sidebar toggle and title) in web mode
+        self.top_bar.setVisible(True)
+        
+        # Show sidebar only in web mode
+        if self.sidebar_widget:
+            self.sidebar_widget.setVisible(self.sidebar_visible)
+        
+        # Remove special mode tabs and restore web tabs
+        self.remove_api_tabs()
+        self.remove_cmd_tabs()
+        self.remove_pdf_tabs()
+        self.restore_web_tabs()
     
     def store_and_remove_web_tabs(self):
         """Store current web tabs and remove them from view"""
