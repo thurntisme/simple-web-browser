@@ -413,6 +413,11 @@ class TabManager:
                 security_score_action.triggered.connect(lambda: self.analyze_security_score(browser))
                 menu.addAction(security_score_action)
                 
+                # Add Header Policy Simulator
+                header_policy_action = QAction("🛡️ Header Policy Simulator", self.main_window)
+                header_policy_action.triggered.connect(lambda: self.show_header_policy_simulator(browser))
+                menu.addAction(header_policy_action)
+                
                 # Add Network Request Timeline feature
                 network_timeline_action = QAction("📊 Network Request Timeline", self.main_window)
                 network_timeline_action.triggered.connect(lambda: self.show_network_timeline(browser))
@@ -4546,6 +4551,25 @@ class TabManager:
                 
         except Exception as e:
             self.main_window.status_info.setText(f"❌ Export error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_header_policy_simulator(self, browser):
+        """Show Header Policy Simulator dialog"""
+        try:
+            from header_policy_simulator import show_header_policy_simulator
+            
+            # Show status
+            self.main_window.status_info.setText("🛡️ Opening Header Policy Simulator...")
+            
+            # Show the simulator dialog
+            dialog = show_header_policy_simulator(browser, self.main_window)
+            
+            # Update status
+            QTimer.singleShot(1000, lambda: self.main_window.status_info.setText("🛡️ Header Policy Simulator opened"))
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Failed to open Header Policy Simulator: {str(e)}")
             QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
     
     def show_network_timeline(self, browser):
