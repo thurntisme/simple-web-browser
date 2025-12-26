@@ -438,6 +438,11 @@ class TabManager:
                 font_detector_action = QAction("🔤 Font Detector", self.main_window)
                 font_detector_action.triggered.connect(lambda: self.detect_fonts(browser))
                 menu.addAction(font_detector_action)
+                
+                # Add Technology Detector feature
+                tech_detector_action = QAction("🔧 Technology Detector", self.main_window)
+                tech_detector_action.triggered.connect(lambda: self.detect_technologies(browser))
+                menu.addAction(tech_detector_action)
         
         # Show menu at cursor position
         menu.exec_(browser.mapToGlobal(pos))
@@ -7871,5 +7876,1332 @@ class TabManager:
         lines.append(f"Font Sizes: {len(font_sizes)} unique")
         lines.append(f"Font Weights: {len(font_weights)} unique")
         lines.append("")
+        
+        return '\n'.join(lines)
+    
+    def detect_technologies(self, browser):
+        """Detect technologies used on the current website"""
+        try:
+            page = browser.page()
+            current_url = browser.url().toString()
+            
+            # Show initial status
+            self.main_window.status_info.setText("🔧 Detecting technologies...")
+            
+            # JavaScript to detect technologies
+            js_code = """
+            (function() {
+                var techData = {
+                    url: window.location.href,
+                    title: document.title,
+                    frameworks: [],
+                    libraries: [],
+                    cms: [],
+                    analytics: [],
+                    advertising: [],
+                    cdn: [],
+                    webServer: [],
+                    programming: [],
+                    databases: [],
+                    security: [],
+                    performance: [],
+                    ui: [],
+                    fonts: [],
+                    meta: {
+                        viewport: '',
+                        charset: '',
+                        generator: '',
+                        description: '',
+                        keywords: ''
+                    },
+                    scripts: [],
+                    stylesheets: [],
+                    images: [],
+                    technologies: {},
+                    headers: {},
+                    cookies: []
+                };
+                
+                // Detect meta information
+                var metaTags = document.getElementsByTagName('meta');
+                for (var i = 0; i < metaTags.length; i++) {
+                    var meta = metaTags[i];
+                    var name = meta.getAttribute('name') || meta.getAttribute('property') || meta.getAttribute('http-equiv');
+                    var content = meta.getAttribute('content') || '';
+                    
+                    if (name) {
+                        switch(name.toLowerCase()) {
+                            case 'viewport':
+                                techData.meta.viewport = content;
+                                break;
+                            case 'generator':
+                                techData.meta.generator = content;
+                                break;
+                            case 'description':
+                                techData.meta.description = content;
+                                break;
+                            case 'keywords':
+                                techData.meta.keywords = content;
+                                break;
+                        }
+                    }
+                    
+                    if (meta.getAttribute('charset')) {
+                        techData.meta.charset = meta.getAttribute('charset');
+                    }
+                }
+                
+                // Detect scripts
+                var scripts = document.getElementsByTagName('script');
+                for (var i = 0; i < scripts.length; i++) {
+                    var script = scripts[i];
+                    var src = script.src || '';
+                    var content = script.textContent || script.innerHTML || '';
+                    
+                    if (src) {
+                        techData.scripts.push({
+                            type: 'external',
+                            src: src,
+                            async: script.async || false,
+                            defer: script.defer || false
+                        });
+                    } else if (content.trim()) {
+                        techData.scripts.push({
+                            type: 'inline',
+                            content: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+                            size: content.length
+                        });
+                    }
+                }
+                
+                // Detect stylesheets
+                var links = document.getElementsByTagName('link');
+                for (var i = 0; i < links.length; i++) {
+                    var link = links[i];
+                    if (link.rel === 'stylesheet') {
+                        techData.stylesheets.push({
+                            href: link.href || '',
+                            media: link.media || 'all'
+                        });
+                    }
+                }
+                
+                // Detect images
+                var images = document.getElementsByTagName('img');
+                var imageFormats = {};
+                for (var i = 0; i < images.length; i++) {
+                    var img = images[i];
+                    var src = img.src || '';
+                    if (src) {
+                        var ext = src.split('.').pop().split('?')[0].toLowerCase();
+                        imageFormats[ext] = (imageFormats[ext] || 0) + 1;
+                    }
+                }
+                techData.images = imageFormats;
+                
+                // Technology detection patterns
+                var detectionPatterns = {
+                    // JavaScript Frameworks
+                    'React': function() {
+                        return !!(window.React || window.ReactDOM || document.querySelector('[data-reactroot]') || 
+                                document.querySelector('script[src*="react"]'));
+                    },
+                    'Vue.js': function() {
+                        return !!(window.Vue || document.querySelector('[data-v-]') || 
+                                document.querySelector('script[src*="vue"]'));
+                    },
+                    'Angular': function() {
+                        return !!(window.angular || window.ng || document.querySelector('[ng-app]') || 
+                                document.querySelector('script[src*="angular"]'));
+                    },
+                    'AngularJS': function() {
+                        return !!(window.angular && !window.ng);
+                    },
+                    'Svelte': function() {
+                        return !!(document.querySelector('script[src*="svelte"]') || 
+                                document.querySelector('[class*="svelte-"]'));
+                    },
+                    'Next.js': function() {
+                        return !!(window.__NEXT_DATA__ || document.querySelector('script[src*="next"]'));
+                    },
+                    'Nuxt.js': function() {
+                        return !!(window.$nuxt || document.querySelector('script[src*="nuxt"]'));
+                    },
+                    
+                    // JavaScript Libraries
+                    'jQuery': function() {
+                        return !!(window.jQuery || window.$);
+                    },
+                    'Lodash': function() {
+                        return !!(window._ && window._.VERSION);
+                    },
+                    'Moment.js': function() {
+                        return !!(window.moment);
+                    },
+                    'D3.js': function() {
+                        return !!(window.d3);
+                    },
+                    'Three.js': function() {
+                        return !!(window.THREE);
+                    },
+                    'Chart.js': function() {
+                        return !!(window.Chart);
+                    },
+                    'Axios': function() {
+                        return !!(window.axios);
+                    },
+                    
+                    // CSS Frameworks
+                    'Bootstrap': function() {
+                        return !!(document.querySelector('link[href*="bootstrap"]') || 
+                                document.querySelector('.container, .row, .col-') ||
+                                document.querySelector('script[src*="bootstrap"]'));
+                    },
+                    'Tailwind CSS': function() {
+                        return !!(document.querySelector('link[href*="tailwind"]') || 
+                                document.querySelector('[class*="tw-"], [class*="bg-"], [class*="text-"]'));
+                    },
+                    'Bulma': function() {
+                        return !!(document.querySelector('link[href*="bulma"]') || 
+                                document.querySelector('.column, .columns'));
+                    },
+                    'Foundation': function() {
+                        return !!(document.querySelector('link[href*="foundation"]') || 
+                                document.querySelector('.foundation-'));
+                    },
+                    'Materialize': function() {
+                        return !!(document.querySelector('link[href*="materialize"]') || 
+                                document.querySelector('.material-'));
+                    },
+                    
+                    // Content Management Systems
+                    'WordPress': function() {
+                        return !!(document.querySelector('link[href*="wp-content"]') || 
+                                document.querySelector('script[src*="wp-"]') ||
+                                techData.meta.generator.toLowerCase().includes('wordpress'));
+                    },
+                    'Drupal': function() {
+                        return !!(document.querySelector('script[src*="drupal"]') || 
+                                techData.meta.generator.toLowerCase().includes('drupal'));
+                    },
+                    'Joomla': function() {
+                        return !!(document.querySelector('script[src*="joomla"]') || 
+                                techData.meta.generator.toLowerCase().includes('joomla'));
+                    },
+                    'Shopify': function() {
+                        return !!(window.Shopify || document.querySelector('script[src*="shopify"]'));
+                    },
+                    'Magento': function() {
+                        return !!(window.Magento || document.querySelector('script[src*="magento"]'));
+                    },
+                    
+                    // Analytics & Tracking
+                    'Google Analytics': function() {
+                        return !!(window.gtag || window.ga || window.GoogleAnalyticsObject || 
+                                document.querySelector('script[src*="google-analytics"]') ||
+                                document.querySelector('script[src*="gtag"]'));
+                    },
+                    'Google Tag Manager': function() {
+                        return !!(window.dataLayer || document.querySelector('script[src*="googletagmanager"]'));
+                    },
+                    'Facebook Pixel': function() {
+                        return !!(window.fbq || document.querySelector('script[src*="facebook"]'));
+                    },
+                    'Hotjar': function() {
+                        return !!(window.hj || document.querySelector('script[src*="hotjar"]'));
+                    },
+                    'Mixpanel': function() {
+                        return !!(window.mixpanel);
+                    },
+                    
+                    // CDNs
+                    'Cloudflare': function() {
+                        return !!(document.querySelector('script[src*="cloudflare"]') || 
+                                document.querySelector('link[href*="cloudflare"]'));
+                    },
+                    'jsDelivr': function() {
+                        return !!(document.querySelector('script[src*="jsdelivr"]') || 
+                                document.querySelector('link[href*="jsdelivr"]'));
+                    },
+                    'unpkg': function() {
+                        return !!(document.querySelector('script[src*="unpkg"]') || 
+                                document.querySelector('link[href*="unpkg"]'));
+                    },
+                    'cdnjs': function() {
+                        return !!(document.querySelector('script[src*="cdnjs"]') || 
+                                document.querySelector('link[href*="cdnjs"]'));
+                    },
+                    
+                    // Fonts
+                    'Google Fonts': function() {
+                        return !!(document.querySelector('link[href*="fonts.googleapis"]') || 
+                                document.querySelector('link[href*="fonts.gstatic"]'));
+                    },
+                    'Adobe Fonts': function() {
+                        return !!(document.querySelector('script[src*="typekit"]') || 
+                                document.querySelector('link[href*="typekit"]'));
+                    },
+                    'Font Awesome': function() {
+                        return !!(document.querySelector('link[href*="font-awesome"]') || 
+                                document.querySelector('script[src*="font-awesome"]') ||
+                                document.querySelector('[class*="fa-"]'));
+                    },
+                    
+                    // Build Tools & Bundlers (detectable traces)
+                    'Webpack': function() {
+                        return !!(window.webpackJsonp || document.querySelector('script[src*="webpack"]'));
+                    },
+                    'Vite': function() {
+                        return !!(document.querySelector('script[src*="vite"]') || 
+                                document.querySelector('script[type="module"][src*="@vite"]'));
+                    },
+                    'Parcel': function() {
+                        return !!(document.querySelector('script[src*="parcel"]'));
+                    },
+                    
+                    // Payment Systems
+                    'Stripe': function() {
+                        return !!(window.Stripe || document.querySelector('script[src*="stripe"]'));
+                    },
+                    'PayPal': function() {
+                        return !!(window.paypal || document.querySelector('script[src*="paypal"]'));
+                    },
+                    
+                    // Maps
+                    'Google Maps': function() {
+                        return !!(window.google && window.google.maps || 
+                                document.querySelector('script[src*="maps.googleapis"]'));
+                    },
+                    'Mapbox': function() {
+                        return !!(window.mapboxgl || document.querySelector('script[src*="mapbox"]'));
+                    },
+                    
+                    // Social Media
+                    'Twitter Widgets': function() {
+                        return !!(window.twttr || document.querySelector('script[src*="twitter"]'));
+                    },
+                    'Facebook SDK': function() {
+                        return !!(window.FB || document.querySelector('script[src*="facebook"]'));
+                    },
+                    
+                    // Security
+                    'reCAPTCHA': function() {
+                        return !!(window.grecaptcha || document.querySelector('script[src*="recaptcha"]'));
+                    },
+                    
+                    // Performance
+                    'Service Worker': function() {
+                        return !!('serviceWorker' in navigator && navigator.serviceWorker.controller);
+                    },
+                    'Web Workers': function() {
+                        return !!(window.Worker);
+                    },
+                    'WebAssembly': function() {
+                        return !!(window.WebAssembly);
+                    }
+                };
+                
+                // Run detection
+                for (var tech in detectionPatterns) {
+                    try {
+                        if (detectionPatterns[tech]()) {
+                            techData.technologies[tech] = {
+                                detected: true,
+                                confidence: 'high'
+                            };
+                        }
+                    } catch (e) {
+                        // Ignore detection errors
+                    }
+                }
+                
+                // Analyze script sources for additional technologies
+                techData.scripts.forEach(function(script) {
+                    if (script.type === 'external' && script.src) {
+                        var src = script.src.toLowerCase();
+                        
+                        // Additional detections based on script URLs
+                        if (src.includes('jquery')) techData.technologies['jQuery'] = {detected: true, confidence: 'high'};
+                        if (src.includes('bootstrap')) techData.technologies['Bootstrap'] = {detected: true, confidence: 'high'};
+                        if (src.includes('react')) techData.technologies['React'] = {detected: true, confidence: 'high'};
+                        if (src.includes('vue')) techData.technologies['Vue.js'] = {detected: true, confidence: 'high'};
+                        if (src.includes('angular')) techData.technologies['Angular'] = {detected: true, confidence: 'high'};
+                        if (src.includes('lodash')) techData.technologies['Lodash'] = {detected: true, confidence: 'high'};
+                        if (src.includes('moment')) techData.technologies['Moment.js'] = {detected: true, confidence: 'high'};
+                        if (src.includes('d3')) techData.technologies['D3.js'] = {detected: true, confidence: 'high'};
+                        if (src.includes('three')) techData.technologies['Three.js'] = {detected: true, confidence: 'high'};
+                        if (src.includes('chart')) techData.technologies['Chart.js'] = {detected: true, confidence: 'high'};
+                    }
+                });
+                
+                // Analyze stylesheets
+                techData.stylesheets.forEach(function(stylesheet) {
+                    if (stylesheet.href) {
+                        var href = stylesheet.href.toLowerCase();
+                        
+                        if (href.includes('bootstrap')) techData.technologies['Bootstrap'] = {detected: true, confidence: 'high'};
+                        if (href.includes('tailwind')) techData.technologies['Tailwind CSS'] = {detected: true, confidence: 'high'};
+                        if (href.includes('bulma')) techData.technologies['Bulma'] = {detected: true, confidence: 'high'};
+                        if (href.includes('foundation')) techData.technologies['Foundation'] = {detected: true, confidence: 'high'};
+                        if (href.includes('materialize')) techData.technologies['Materialize'] = {detected: true, confidence: 'high'};
+                        if (href.includes('font-awesome')) techData.technologies['Font Awesome'] = {detected: true, confidence: 'high'};
+                    }
+                });
+                
+                // Get cookies
+                if (document.cookie) {
+                    var cookies = document.cookie.split(';');
+                    cookies.forEach(function(cookie) {
+                        var parts = cookie.trim().split('=');
+                        if (parts.length >= 2) {
+                            techData.cookies.push({
+                                name: parts[0],
+                                value: parts[1].substring(0, 50) + (parts[1].length > 50 ? '...' : '')
+                            });
+                        }
+                    });
+                }
+                
+                // Categorize technologies
+                var categories = {
+                    'JavaScript Frameworks': ['React', 'Vue.js', 'Angular', 'AngularJS', 'Svelte', 'Next.js', 'Nuxt.js'],
+                    'JavaScript Libraries': ['jQuery', 'Lodash', 'Moment.js', 'D3.js', 'Three.js', 'Chart.js', 'Axios'],
+                    'CSS Frameworks': ['Bootstrap', 'Tailwind CSS', 'Bulma', 'Foundation', 'Materialize'],
+                    'Content Management': ['WordPress', 'Drupal', 'Joomla', 'Shopify', 'Magento'],
+                    'Analytics & Tracking': ['Google Analytics', 'Google Tag Manager', 'Facebook Pixel', 'Hotjar', 'Mixpanel'],
+                    'CDN & Hosting': ['Cloudflare', 'jsDelivr', 'unpkg', 'cdnjs'],
+                    'Fonts & Icons': ['Google Fonts', 'Adobe Fonts', 'Font Awesome'],
+                    'Build Tools': ['Webpack', 'Vite', 'Parcel'],
+                    'Payment Systems': ['Stripe', 'PayPal'],
+                    'Maps & Location': ['Google Maps', 'Mapbox'],
+                    'Social Media': ['Twitter Widgets', 'Facebook SDK'],
+                    'Security': ['reCAPTCHA'],
+                    'Performance': ['Service Worker', 'Web Workers', 'WebAssembly']
+                };
+                
+                techData.categories = {};
+                for (var category in categories) {
+                    techData.categories[category] = [];
+                    categories[category].forEach(function(tech) {
+                        if (techData.technologies[tech] && techData.technologies[tech].detected) {
+                            techData.categories[category].push(tech);
+                        }
+                    });
+                }
+                
+                return techData;
+            })();
+            """
+            
+            def process_tech_data(tech_data):
+                if not tech_data:
+                    self.main_window.status_info.setText("❌ Failed to detect technologies")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                    return
+                
+                # Create and show the technology detector dialog
+                self.show_technology_detector_dialog(tech_data, current_url)
+            
+            # Execute JavaScript to get technology data
+            page.runJavaScript(js_code, process_tech_data)
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Technology detection error: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+    
+    def show_technology_detector_dialog(self, tech_data, base_url):
+        """Show dialog with technology detection results"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QTextEdit, QPushButton, QTabWidget, QWidget,
+                                   QTreeWidget, QTreeWidgetItem, QHeaderView, 
+                                   QFileDialog, QScrollArea, QFrame, QProgressBar)
+        from PyQt5.QtCore import Qt, QTimer
+        from PyQt5.QtGui import QFont, QColor
+        from datetime import datetime
+        import json
+        
+        # Count detected technologies
+        detected_count = len([tech for tech, data in tech_data.get('technologies', {}).items() if data.get('detected')])
+        
+        # Create dialog
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle(f"🔧 Technology Detector - {detected_count} technologies found")
+        dialog.setMinimumSize(900, 700)
+        dialog.resize(1200, 800)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Header
+        header_label = QLabel(f"Technology Analysis for: {base_url}")
+        header_label.setStyleSheet("font-weight: bold; padding: 10px; background-color: #e8f4fd; border-radius: 5px;")
+        header_label.setWordWrap(True)
+        layout.addWidget(header_label)
+        
+        # Summary
+        scripts_count = len(tech_data.get('scripts', []))
+        stylesheets_count = len(tech_data.get('stylesheets', []))
+        cookies_count = len(tech_data.get('cookies', []))
+        
+        summary_label = QLabel(f"📊 Summary: {detected_count} technologies, {scripts_count} scripts, {stylesheets_count} stylesheets, {cookies_count} cookies")
+        summary_label.setStyleSheet("padding: 5px; background-color: #f0f8ff; border-radius: 3px;")
+        summary_label.setWordWrap(True)
+        layout.addWidget(summary_label)
+        
+        # Tab widget for different views
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+        
+        # Overview Tab
+        overview_widget = self.create_tech_overview_tab(tech_data)
+        tab_widget.addTab(overview_widget, "📊 Overview")
+        
+        # Technologies Tab
+        technologies_widget = self.create_technologies_tab(tech_data)
+        tab_widget.addTab(technologies_widget, f"🔧 Technologies ({detected_count})")
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        export_button = QPushButton("💾 Export Report")
+        copy_button = QPushButton("📋 Copy Summary")
+        refresh_button = QPushButton("🔄 Re-analyze")
+        close_button = QPushButton("❌ Close")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(export_button)
+        button_layout.addWidget(copy_button)
+        button_layout.addWidget(refresh_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        def export_report():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"tech_analysis_{timestamp}.json"
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "Export Technology Analysis Report",
+                filename,
+                "JSON Files (*.json);;Text Files (*.txt);;All Files (*.*)"
+            )
+            
+            if file_path:
+                try:
+                    export_data = {
+                        'url': base_url,
+                        'timestamp': datetime.now().isoformat(),
+                        'tech_data': tech_data
+                    }
+                    
+                    if file_path.endswith('.json'):
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            json.dump(export_data, f, indent=2, ensure_ascii=False)
+                    else:
+                        # Export as text report
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(self.generate_tech_text_report(export_data))
+                    
+                    self.main_window.status_info.setText(f"✅ Technology report exported to: {file_path}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                except Exception as e:
+                    self.main_window.status_info.setText(f"❌ Export failed: {str(e)}")
+                    QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        def copy_summary():
+            summary_text = self.generate_tech_summary(tech_data, base_url)
+            from PyQt5.QtWidgets import QApplication
+            clipboard = QApplication.clipboard()
+            clipboard.setText(summary_text)
+            self.main_window.status_info.setText("📋 Technology summary copied to clipboard")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+        
+        def refresh_analysis():
+            dialog.accept()
+            # Re-run the analysis
+            browser = self.get_current_browser()
+            if browser:
+                self.detect_technologies(browser)
+        
+        # Connect buttons
+        export_button.clicked.connect(export_report)
+        copy_button.clicked.connect(copy_summary)
+        refresh_button.clicked.connect(refresh_analysis)
+        close_button.clicked.connect(dialog.accept)
+        
+        # Show dialog
+        dialog.exec_()
+        
+        # Update main window status
+        self.main_window.status_info.setText(f"🔧 Technology detection complete - {detected_count} technologies found")
+        QTimer.singleShot(5000, lambda: self.main_window.status_info.setText(""))
+    
+    def create_tech_overview_tab(self, tech_data):
+        """Create the overview tab for technology analysis"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                                   QFrame, QScrollArea)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # Basic Information
+        basic_frame = QFrame()
+        basic_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px;")
+        basic_layout = QVBoxLayout(basic_frame)
+        
+        basic_title = QLabel("📋 Website Information")
+        basic_title.setFont(QFont("Arial", 12, QFont.Bold))
+        basic_layout.addWidget(basic_title)
+        
+        meta = tech_data.get('meta', {})
+        basic_layout.addWidget(QLabel(f"Title: {tech_data.get('title', 'No title')}"))
+        basic_layout.addWidget(QLabel(f"Generator: {meta.get('generator', 'Not specified')}"))
+        basic_layout.addWidget(QLabel(f"Charset: {meta.get('charset', 'Not specified')}"))
+        basic_layout.addWidget(QLabel(f"Viewport: {meta.get('viewport', 'Not specified')}"))
+        
+        # Security info
+        url = tech_data.get('url', '')
+        if url.startswith('https://'):
+            basic_layout.addWidget(QLabel("🔒 HTTPS: Enabled"))
+        else:
+            basic_layout.addWidget(QLabel("⚠️ HTTPS: Not enabled"))
+        
+        scroll_layout.addWidget(basic_frame)
+        
+        # Resource Summary
+        resources_frame = QFrame()
+        resources_frame.setStyleSheet("background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 15px;")
+        resources_layout = QVBoxLayout(resources_frame)
+        
+        resources_title = QLabel("📊 Resource Summary")
+        resources_title.setFont(QFont("Arial", 12, QFont.Bold))
+        resources_layout.addWidget(resources_title)
+        
+        scripts = tech_data.get('scripts', [])
+        stylesheets = tech_data.get('stylesheets', [])
+        images = tech_data.get('images', {})
+        cookies = tech_data.get('cookies', [])
+        
+        external_scripts = len([s for s in scripts if s.get('type') == 'external'])
+        inline_scripts = len([s for s in scripts if s.get('type') == 'inline'])
+        
+        resources_layout.addWidget(QLabel(f"📜 External Scripts: {external_scripts}"))
+        resources_layout.addWidget(QLabel(f"📝 Inline Scripts: {inline_scripts}"))
+        resources_layout.addWidget(QLabel(f"🎨 Stylesheets: {len(stylesheets)}"))
+        resources_layout.addWidget(QLabel(f"🖼️ Image Formats: {len(images)} types"))
+        resources_layout.addWidget(QLabel(f"🍪 Cookies: {len(cookies)}"))
+        
+        scroll_layout.addWidget(resources_frame)
+        
+        # Technology Categories (Enhanced)
+        categories = tech_data.get('categories', {})
+        for category, technologies in categories.items():
+            if technologies:  # Only show categories with detected technologies
+                cat_frame = QFrame()
+                cat_frame.setStyleSheet("background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px;")
+                cat_layout = QVBoxLayout(cat_frame)
+                
+                cat_title = QLabel(f"🔧 {category} ({len(technologies)})")
+                cat_title.setFont(QFont("Arial", 11, QFont.Bold))
+                cat_layout.addWidget(cat_title)
+                
+                # Create a grid layout for technologies
+                tech_text = ", ".join(technologies)
+                tech_label = QLabel(tech_text)
+                tech_label.setWordWrap(True)
+                tech_label.setStyleSheet("color: #155724; margin-left: 10px; font-weight: 500;")
+                cat_layout.addWidget(tech_label)
+                
+                scroll_layout.addWidget(cat_frame)
+        
+        # Quick Performance & Security Assessment
+        assessment_frame = QFrame()
+        assessment_frame.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px;")
+        assessment_layout = QVBoxLayout(assessment_frame)
+        
+        assessment_title = QLabel("⚡ Quick Assessment")
+        assessment_title.setFont(QFont("Arial", 12, QFont.Bold))
+        assessment_layout.addWidget(assessment_title)
+        
+        # Performance indicators
+        technologies = tech_data.get('technologies', {})
+        
+        if external_scripts > 10:
+            assessment_layout.addWidget(QLabel("⚠️ Many external scripts may impact loading speed"))
+        elif external_scripts <= 5:
+            assessment_layout.addWidget(QLabel("✅ Good number of external scripts"))
+        
+        if 'Service Worker' in technologies:
+            assessment_layout.addWidget(QLabel("✅ Service Worker detected - Offline capability"))
+        
+        if any(cdn in str(s.get('src', '')) for s in scripts for cdn in ['cdn', 'jsdelivr', 'unpkg', 'cdnjs']):
+            assessment_layout.addWidget(QLabel("✅ CDN usage detected - Good for performance"))
+        
+        if 'reCAPTCHA' in technologies:
+            assessment_layout.addWidget(QLabel("✅ reCAPTCHA detected - Bot protection enabled"))
+        
+        if url.startswith('https://'):
+            assessment_layout.addWidget(QLabel("✅ HTTPS enabled - Secure connection"))
+        else:
+            assessment_layout.addWidget(QLabel("⚠️ HTTP connection - Consider enabling HTTPS"))
+        
+        scroll_layout.addWidget(assessment_frame)
+        
+        # Top Technologies Summary
+        detected_techs = [tech for tech, data in technologies.items() if data.get('detected')]
+        if detected_techs:
+            top_frame = QFrame()
+            top_frame.setStyleSheet("background-color: #f0f8ff; border: 1px solid #b8daff; border-radius: 5px; padding: 15px;")
+            top_layout = QVBoxLayout(top_frame)
+            
+            top_title = QLabel(f"🏆 Key Technologies ({len(detected_techs)})")
+            top_title.setFont(QFont("Arial", 12, QFont.Bold))
+            top_layout.addWidget(top_title)
+            
+            # Show top technologies in a more compact format
+            top_techs = detected_techs[:8]  # Show first 8
+            tech_grid_text = " • ".join(top_techs)
+            if len(detected_techs) > 8:
+                tech_grid_text += f" • and {len(detected_techs) - 8} more..."
+            
+            tech_summary = QLabel(tech_grid_text)
+            tech_summary.setWordWrap(True)
+            tech_summary.setStyleSheet("color: #004085; font-weight: 500;")
+            top_layout.addWidget(tech_summary)
+            
+            scroll_layout.addWidget(top_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def create_technologies_tab(self, tech_data):
+        """Create the technologies tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel, QHBoxLayout, QFrame)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QColor, QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header with summary
+        header_frame = QFrame()
+        header_frame.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 10px;")
+        header_layout = QHBoxLayout(header_frame)
+        
+        technologies = tech_data.get('technologies', {})
+        detected_count = len([tech for tech, data in technologies.items() if data.get('detected')])
+        
+        header_label = QLabel(f"🔧 Detected Technologies ({detected_count})")
+        header_label.setFont(QFont("Arial", 14, QFont.Bold))
+        header_layout.addWidget(header_label)
+        
+        # Add confidence legend
+        legend_layout = QVBoxLayout()
+        legend_layout.addWidget(QLabel("Confidence Levels:"))
+        
+        high_label = QLabel("🟢 High")
+        high_label.setStyleSheet("color: #28a745; font-size: 11px;")
+        legend_layout.addWidget(high_label)
+        
+        medium_label = QLabel("🟡 Medium") 
+        medium_label.setStyleSheet("color: #ffc107; font-size: 11px;")
+        legend_layout.addWidget(medium_label)
+        
+        low_label = QLabel("🔴 Low")
+        low_label.setStyleSheet("color: #dc3545; font-size: 11px;")
+        legend_layout.addWidget(low_label)
+        
+        header_layout.addStretch()
+        header_layout.addLayout(legend_layout)
+        
+        layout.addWidget(header_frame)
+        
+        # Tree widget for technologies
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Technology', 'Category', 'Confidence', 'Description', 'Details'])
+        tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
+        categories = tech_data.get('categories', {})
+        
+        # Enhanced technology descriptions
+        tech_descriptions = {
+            'React': 'JavaScript library for building user interfaces with component-based architecture',
+            'Vue.js': 'Progressive JavaScript framework for building user interfaces',
+            'Angular': 'Platform and framework for building single-page client applications',
+            'AngularJS': 'Legacy JavaScript MVW framework (predecessor to Angular)',
+            'Svelte': 'Compile-time JavaScript framework for building web applications',
+            'Next.js': 'React framework for production with server-side rendering',
+            'Nuxt.js': 'Vue.js framework for universal applications',
+            'jQuery': 'Fast, small, and feature-rich JavaScript library for DOM manipulation',
+            'Lodash': 'Modern JavaScript utility library delivering modularity and performance',
+            'Moment.js': 'JavaScript library for parsing, validating, and formatting dates',
+            'D3.js': 'JavaScript library for producing dynamic, interactive data visualizations',
+            'Three.js': 'JavaScript 3D library for creating and displaying 3D computer graphics',
+            'Chart.js': 'Simple yet flexible JavaScript charting library',
+            'Axios': 'Promise-based HTTP client for JavaScript',
+            'Bootstrap': 'CSS framework for responsive, mobile-first front-end development',
+            'Tailwind CSS': 'Utility-first CSS framework for rapidly building custom designs',
+            'Bulma': 'Modern CSS framework based on Flexbox',
+            'Foundation': 'Responsive front-end framework for web development',
+            'Materialize': 'CSS framework based on Material Design principles',
+            'WordPress': 'Content management system (CMS) powering 40% of the web',
+            'Drupal': 'Open-source content management framework',
+            'Joomla': 'Content management system for publishing web content',
+            'Shopify': 'E-commerce platform for online stores and retail point-of-sale systems',
+            'Magento': 'Open-source e-commerce platform written in PHP',
+            'Google Analytics': 'Web analytics service for tracking and reporting website traffic',
+            'Google Tag Manager': 'Tag management system for marketing and analytics tags',
+            'Facebook Pixel': 'Analytics tool for tracking conversions from Facebook ads',
+            'Hotjar': 'Behavior analytics and user feedback service',
+            'Mixpanel': 'Business analytics service for tracking user interactions',
+            'Font Awesome': 'Icon library and toolkit with scalable vector icons',
+            'Cloudflare': 'Content delivery network and DDoS mitigation service',
+            'jsDelivr': 'Free CDN for open source projects',
+            'unpkg': 'Fast, global content delivery network for npm packages',
+            'cdnjs': 'Free and open-source CDN service',
+            'Google Fonts': 'Library of free licensed font families',
+            'Adobe Fonts': 'Subscription-based font service (formerly Typekit)',
+            'Stripe': 'Payment processing platform for internet businesses',
+            'PayPal': 'Online payment system supporting money transfers',
+            'Google Maps': 'Web mapping service with satellite imagery and street maps',
+            'Mapbox': 'Location data platform providing maps and location services',
+            'reCAPTCHA': 'CAPTCHA service to protect websites from spam and abuse',
+            'Service Worker': 'Script for background sync, push notifications, and offline functionality',
+            'Web Workers': 'JavaScript API for running scripts in background threads',
+            'WebAssembly': 'Binary instruction format for stack-based virtual machine',
+            'Webpack': 'Static module bundler for modern JavaScript applications',
+            'Vite': 'Build tool for modern web development with fast HMR',
+            'Parcel': 'Zero-configuration build tool for web applications'
+        }
+        
+        # Technology details (version info, usage notes, etc.)
+        tech_details = {
+            'React': 'Component-based',
+            'Vue.js': 'Progressive',
+            'Angular': 'Full framework',
+            'jQuery': 'DOM library',
+            'Bootstrap': 'CSS framework',
+            'Google Analytics': 'Web analytics',
+            'Font Awesome': 'Icon library',
+            'Cloudflare': 'CDN + Security',
+            'Service Worker': 'PWA feature',
+            'WebAssembly': 'High performance'
+        }
+        
+        # Find category for each technology
+        tech_to_category = {}
+        for category, techs in categories.items():
+            for tech in techs:
+                tech_to_category[tech] = category
+        
+        # Sort technologies by category and name
+        sorted_technologies = sorted(
+            [(tech_name, tech_info) for tech_name, tech_info in technologies.items() if tech_info.get('detected')],
+            key=lambda x: (tech_to_category.get(x[0], 'Other'), x[0])
+        )
+        
+        for tech_name, tech_info in sorted_technologies:
+            item = QTreeWidgetItem()
+            item.setText(0, tech_name)
+            item.setText(1, tech_to_category.get(tech_name, 'Other'))
+            
+            confidence = tech_info.get('confidence', 'medium')
+            item.setText(2, confidence.title())
+            
+            # Color code confidence with emojis
+            if confidence == 'high':
+                item.setText(2, "🟢 High")
+                item.setBackground(2, QColor(144, 238, 144))  # Light green
+            elif confidence == 'medium':
+                item.setText(2, "🟡 Medium")
+                item.setBackground(2, QColor(255, 255, 0))    # Yellow
+            else:
+                item.setText(2, "🔴 Low")
+                item.setBackground(2, QColor(255, 182, 193))  # Light red
+            
+            # Enhanced description
+            description = tech_descriptions.get(tech_name, f'{tech_name} technology detected on this website')
+            item.setText(3, description)
+            
+            # Additional details
+            details = tech_details.get(tech_name, 'Detected')
+            item.setText(4, details)
+            
+            # Color code by category
+            category = tech_to_category.get(tech_name, 'Other')
+            if 'JavaScript' in category:
+                item.setBackground(0, QColor(255, 248, 220))  # Light yellow
+            elif 'CSS' in category:
+                item.setBackground(0, QColor(230, 247, 255))  # Light blue
+            elif 'Analytics' in category:
+                item.setBackground(0, QColor(240, 255, 240))  # Light green
+            elif 'CDN' in category:
+                item.setBackground(0, QColor(255, 240, 245))  # Light pink
+            
+            tree.addTopLevelItem(item)
+        
+        layout.addWidget(tree)
+        
+        # Summary footer
+        if detected_count > 0:
+            footer_frame = QFrame()
+            footer_frame.setStyleSheet("background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px; padding: 10px; margin-top: 10px;")
+            footer_layout = QVBoxLayout(footer_frame)
+            
+            # Category breakdown
+            category_summary = []
+            for category, techs in categories.items():
+                if techs:
+                    category_summary.append(f"{category}: {len(techs)}")
+            
+            if category_summary:
+                summary_text = " | ".join(category_summary)
+                summary_label = QLabel(f"📊 Category Breakdown: {summary_text}")
+                summary_label.setStyleSheet("font-weight: 500; color: #0c5460;")
+                footer_layout.addWidget(summary_label)
+            
+            layout.addWidget(footer_frame)
+        
+        return widget
+    
+    def create_scripts_tab(self, tech_data):
+        """Create the scripts tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel)
+        from PyQt5.QtCore import Qt
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("📜 JavaScript Files & Scripts")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Tree widget for scripts
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Type', 'Source/Content', 'Attributes', 'Size/Info'])
+        tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        
+        scripts = tech_data.get('scripts', [])
+        
+        for script in scripts:
+            item = QTreeWidgetItem()
+            
+            script_type = script.get('type', 'unknown')
+            item.setText(0, script_type.title())
+            
+            if script_type == 'external':
+                src = script.get('src', '')
+                item.setText(1, src)
+                
+                # Attributes
+                attrs = []
+                if script.get('async'):
+                    attrs.append('async')
+                if script.get('defer'):
+                    attrs.append('defer')
+                item.setText(2, ', '.join(attrs) if attrs else 'none')
+                
+                # Try to determine file size or type from URL
+                if 'min.js' in src:
+                    item.setText(3, 'Minified')
+                elif any(cdn in src for cdn in ['cdn', 'jsdelivr', 'unpkg', 'cdnjs']):
+                    item.setText(3, 'CDN')
+                else:
+                    item.setText(3, 'Local')
+                    
+            else:  # inline
+                content = script.get('content', '')
+                item.setText(1, content[:100] + ('...' if len(content) > 100 else ''))
+                item.setText(2, 'inline')
+                
+                size = script.get('size', 0)
+                if size > 1024:
+                    item.setText(3, f"{size // 1024}KB")
+                else:
+                    item.setText(3, f"{size}B")
+            
+            tree.addTopLevelItem(item)
+        
+        layout.addWidget(tree)
+        
+        return widget
+    
+    def create_stylesheets_tab(self, tech_data):
+        """Create the stylesheets tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, 
+                                   QHeaderView, QLabel)
+        from PyQt5.QtCore import Qt
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("🎨 CSS Stylesheets")
+        header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+        layout.addWidget(header)
+        
+        # Tree widget for stylesheets
+        tree = QTreeWidget()
+        tree.setHeaderLabels(['Source', 'Media', 'Type'])
+        tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        
+        stylesheets = tech_data.get('stylesheets', [])
+        
+        for stylesheet in stylesheets:
+            item = QTreeWidgetItem()
+            
+            href = stylesheet.get('href', '')
+            item.setText(0, href)
+            item.setText(1, stylesheet.get('media', 'all'))
+            
+            # Determine type
+            if any(cdn in href for cdn in ['cdn', 'googleapis', 'jsdelivr', 'unpkg', 'cdnjs']):
+                item.setText(2, 'CDN')
+            elif 'min.css' in href:
+                item.setText(2, 'Minified')
+            else:
+                item.setText(2, 'Local')
+            
+            tree.addTopLevelItem(item)
+        
+        # Image formats section
+        images = tech_data.get('images', {})
+        if images:
+            layout.addWidget(QLabel(""))  # Spacer
+            
+            images_header = QLabel("🖼️ Image Formats")
+            images_header.setStyleSheet("font-weight: bold; font-size: 14px; padding: 5px;")
+            layout.addWidget(images_header)
+            
+            images_tree = QTreeWidget()
+            images_tree.setHeaderLabels(['Format', 'Count'])
+            images_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+            images_tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+            
+            for format_ext, count in images.items():
+                item = QTreeWidgetItem()
+                item.setText(0, format_ext.upper())
+                item.setText(1, str(count))
+                images_tree.addTopLevelItem(item)
+            
+            layout.addWidget(images_tree)
+        else:
+            layout.addWidget(tree)
+        
+        return widget
+    
+    def create_meta_tab(self, tech_data):
+        """Create the meta information tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QLabel, QTabWidget)
+        from PyQt5.QtCore import Qt
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Sub-tabs for different meta information
+        meta_tabs = QTabWidget()
+        layout.addWidget(meta_tabs)
+        
+        # Meta Tags Tab
+        meta_widget = QWidget()
+        meta_layout = QVBoxLayout(meta_widget)
+        
+        meta_text = QTextEdit()
+        meta_text.setReadOnly(True)
+        meta_text.setStyleSheet("font-family: monospace; background-color: #f8f9fa;")
+        
+        meta_info = tech_data.get('meta', {})
+        meta_content = []
+        meta_content.append("META INFORMATION:")
+        meta_content.append("=" * 30)
+        
+        for key, value in meta_info.items():
+            if value:
+                meta_content.append(f"{key.title()}: {value}")
+        
+        meta_text.setPlainText('\n'.join(meta_content))
+        meta_layout.addWidget(meta_text)
+        
+        meta_tabs.addTab(meta_widget, "📋 Meta Tags")
+        
+        # Cookies Tab
+        cookies_widget = QWidget()
+        cookies_layout = QVBoxLayout(cookies_widget)
+        
+        cookies_text = QTextEdit()
+        cookies_text.setReadOnly(True)
+        cookies_text.setStyleSheet("font-family: monospace; background-color: #f8f9fa;")
+        
+        cookies = tech_data.get('cookies', [])
+        cookies_content = []
+        cookies_content.append("COOKIES:")
+        cookies_content.append("=" * 30)
+        
+        if cookies:
+            for cookie in cookies:
+                cookies_content.append(f"Name: {cookie.get('name', '')}")
+                cookies_content.append(f"Value: {cookie.get('value', '')}")
+                cookies_content.append("-" * 20)
+        else:
+            cookies_content.append("No cookies found")
+        
+        cookies_text.setPlainText('\n'.join(cookies_content))
+        cookies_layout.addWidget(cookies_text)
+        
+        meta_tabs.addTab(cookies_widget, f"🍪 Cookies ({len(cookies)})")
+        
+        return widget
+    
+    def create_security_performance_tab(self, tech_data):
+        """Create the security and performance tab"""
+        from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QFrame, QScrollArea)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Create scroll area
+        scroll = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        
+        # Security Analysis
+        security_frame = QFrame()
+        security_frame.setStyleSheet("background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; padding: 10px;")
+        security_layout = QVBoxLayout(security_frame)
+        
+        security_title = QLabel("🛡️ Security Analysis")
+        security_title.setFont(QFont("Arial", 12, QFont.Bold))
+        security_layout.addWidget(security_title)
+        
+        technologies = tech_data.get('technologies', {})
+        
+        # Check for security-related technologies
+        security_techs = []
+        if 'reCAPTCHA' in technologies:
+            security_techs.append("✅ reCAPTCHA detected - Bot protection enabled")
+        
+        # Check for HTTPS
+        url = tech_data.get('url', '')
+        if url.startswith('https://'):
+            security_techs.append("✅ HTTPS enabled - Secure connection")
+        else:
+            security_techs.append("⚠️ HTTP connection - Not secure")
+        
+        # Check for security headers (basic analysis)
+        meta = tech_data.get('meta', {})
+        if any('security' in str(v).lower() for v in meta.values()):
+            security_techs.append("✅ Security-related meta tags found")
+        
+        if not security_techs:
+            security_techs.append("ℹ️ No obvious security measures detected")
+        
+        for tech in security_techs:
+            security_layout.addWidget(QLabel(tech))
+        
+        scroll_layout.addWidget(security_frame)
+        
+        # Performance Analysis
+        performance_frame = QFrame()
+        performance_frame.setStyleSheet("background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 5px; padding: 10px;")
+        performance_layout = QVBoxLayout(performance_frame)
+        
+        performance_title = QLabel("⚡ Performance Analysis")
+        performance_title.setFont(QFont("Arial", 12, QFont.Bold))
+        performance_layout.addWidget(performance_title)
+        
+        performance_items = []
+        
+        # Check for performance technologies
+        if 'Service Worker' in technologies:
+            performance_items.append("✅ Service Worker detected - Offline capability")
+        if 'WebAssembly' in technologies:
+            performance_items.append("✅ WebAssembly detected - High performance computing")
+        if 'Cloudflare' in technologies:
+            performance_items.append("✅ Cloudflare CDN detected - Global content delivery")
+        
+        # Analyze scripts
+        scripts = tech_data.get('scripts', [])
+        external_scripts = len([s for s in scripts if s.get('type') == 'external'])
+        inline_scripts = len([s for s in scripts if s.get('type') == 'inline'])
+        
+        if external_scripts > 10:
+            performance_items.append(f"⚠️ Many external scripts ({external_scripts}) - May impact loading speed")
+        elif external_scripts > 5:
+            performance_items.append(f"ℹ️ Moderate number of external scripts ({external_scripts})")
+        else:
+            performance_items.append(f"✅ Few external scripts ({external_scripts}) - Good for performance")
+        
+        if inline_scripts > 5:
+            performance_items.append(f"ℹ️ Several inline scripts ({inline_scripts}) - Consider bundling")
+        
+        # Check for minified resources
+        minified_scripts = len([s for s in scripts if s.get('type') == 'external' and 'min.js' in s.get('src', '')])
+        if minified_scripts > 0:
+            performance_items.append(f"✅ {minified_scripts} minified scripts detected - Good for performance")
+        
+        if not performance_items:
+            performance_items.append("ℹ️ Basic performance analysis - no major issues detected")
+        
+        for item in performance_items:
+            performance_layout.addWidget(QLabel(item))
+        
+        scroll_layout.addWidget(performance_frame)
+        
+        # Recommendations
+        recommendations_frame = QFrame()
+        recommendations_frame.setStyleSheet("background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 10px;")
+        recommendations_layout = QVBoxLayout(recommendations_frame)
+        
+        recommendations_title = QLabel("💡 Recommendations")
+        recommendations_title.setFont(QFont("Arial", 12, QFont.Bold))
+        recommendations_layout.addWidget(recommendations_title)
+        
+        recommendations = []
+        
+        # Security recommendations
+        if not url.startswith('https://'):
+            recommendations.append("🔒 Enable HTTPS for secure connections")
+        if 'reCAPTCHA' not in technologies:
+            recommendations.append("🛡️ Consider adding reCAPTCHA for form protection")
+        
+        # Performance recommendations
+        if external_scripts > 10:
+            recommendations.append("⚡ Consider bundling or reducing external scripts")
+        if len(tech_data.get('stylesheets', [])) > 5:
+            recommendations.append("🎨 Consider combining CSS files to reduce requests")
+        
+        # Modern web recommendations
+        if 'Service Worker' not in technologies:
+            recommendations.append("📱 Consider implementing Service Worker for offline functionality")
+        if not any('CDN' in str(s) for s in scripts):
+            recommendations.append("🌐 Consider using a CDN for better global performance")
+        
+        if not recommendations:
+            recommendations.append("✅ Website appears to follow good practices")
+        
+        for rec in recommendations:
+            rec_label = QLabel(rec)
+            rec_label.setWordWrap(True)
+            recommendations_layout.addWidget(rec_label)
+        
+        scroll_layout.addWidget(recommendations_frame)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def generate_tech_summary(self, tech_data, base_url):
+        """Generate a summary of detected technologies"""
+        lines = []
+        lines.append(f"TECHNOLOGY SUMMARY FOR: {base_url}")
+        lines.append("=" * 60)
+        lines.append("")
+        
+        # Detected technologies by category
+        categories = tech_data.get('categories', {})
+        for category, technologies in categories.items():
+            if technologies:
+                lines.append(f"{category.upper()}:")
+                for tech in technologies:
+                    lines.append(f"  • {tech}")
+                lines.append("")
+        
+        # Resource summary
+        scripts = tech_data.get('scripts', [])
+        stylesheets = tech_data.get('stylesheets', [])
+        cookies = tech_data.get('cookies', [])
+        
+        lines.append("RESOURCE SUMMARY:")
+        lines.append(f"  Scripts: {len(scripts)} ({len([s for s in scripts if s.get('type') == 'external'])} external, {len([s for s in scripts if s.get('type') == 'inline'])} inline)")
+        lines.append(f"  Stylesheets: {len(stylesheets)}")
+        lines.append(f"  Cookies: {len(cookies)}")
+        lines.append("")
+        
+        return '\n'.join(lines)
+    
+    def generate_tech_text_report(self, export_data):
+        """Generate a detailed text report"""
+        lines = []
+        lines.append("TECHNOLOGY ANALYSIS REPORT")
+        lines.append("=" * 50)
+        lines.append(f"URL: {export_data['url']}")
+        lines.append(f"Analysis Date: {export_data['timestamp']}")
+        lines.append("")
+        
+        tech_data = export_data['tech_data']
+        
+        # Basic information
+        lines.append("BASIC INFORMATION:")
+        lines.append("-" * 20)
+        lines.append(f"Title: {tech_data.get('title', 'N/A')}")
+        
+        meta = tech_data.get('meta', {})
+        for key, value in meta.items():
+            if value:
+                lines.append(f"{key.title()}: {value}")
+        lines.append("")
+        
+        # Technologies by category
+        categories = tech_data.get('categories', {})
+        for category, technologies in categories.items():
+            if technologies:
+                lines.append(f"{category.upper()}:")
+                for tech in technologies:
+                    lines.append(f"  • {tech}")
+                lines.append("")
+        
+        # Scripts
+        scripts = tech_data.get('scripts', [])
+        if scripts:
+            lines.append("SCRIPTS:")
+            lines.append("-" * 20)
+            for script in scripts[:10]:  # Limit to first 10
+                if script.get('type') == 'external':
+                    lines.append(f"External: {script.get('src', '')}")
+                else:
+                    lines.append(f"Inline: {len(script.get('content', ''))} characters")
+            if len(scripts) > 10:
+                lines.append(f"... and {len(scripts) - 10} more scripts")
+            lines.append("")
+        
+        # Stylesheets
+        stylesheets = tech_data.get('stylesheets', [])
+        if stylesheets:
+            lines.append("STYLESHEETS:")
+            lines.append("-" * 20)
+            for stylesheet in stylesheets[:10]:  # Limit to first 10
+                lines.append(f"  • {stylesheet.get('href', '')}")
+            if len(stylesheets) > 10:
+                lines.append(f"... and {len(stylesheets) - 10} more stylesheets")
+            lines.append("")
         
         return '\n'.join(lines)
