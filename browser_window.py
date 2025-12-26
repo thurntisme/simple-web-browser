@@ -54,6 +54,9 @@ class MainWindow(QMainWindow):
         self.pdf_mode_enabled = False
         self.pdf_tab_widget = None
         self.pdf_tab_index = None
+        self.malware_mode_enabled = False
+        self.malware_tab_widget = None
+        self.malware_tab_index = None
         self.stored_web_tabs = []  # Store web tabs when in special modes
         
         # Sidebar state
@@ -376,12 +379,21 @@ class MainWindow(QMainWindow):
         pdf_mode_action.triggered.connect(self.switch_to_pdf_mode)
         mode_menu.addAction(pdf_mode_action)
         
+        # Malware Scanner mode action
+        malware_mode_action = QAction("🛡️ Malware Scanner", self)
+        malware_mode_action.setShortcut("Ctrl+5")
+        malware_mode_action.setStatusTip("Switch to malware scanner mode")
+        malware_mode_action.setCheckable(True)
+        malware_mode_action.triggered.connect(self.switch_to_malware_mode)
+        mode_menu.addAction(malware_mode_action)
+        
         # Create action group for exclusive selection
         self.mode_action_group = QActionGroup(self)
         self.mode_action_group.addAction(web_mode_action)
         self.mode_action_group.addAction(api_mode_action)
         self.mode_action_group.addAction(cmd_mode_action)
         self.mode_action_group.addAction(pdf_mode_action)
+        self.mode_action_group.addAction(malware_mode_action)
         self.mode_action_group.setExclusive(True)
         
         # Store references to mode actions for later use
@@ -389,6 +401,7 @@ class MainWindow(QMainWindow):
         self.api_mode_action = api_mode_action
         self.cmd_mode_action = cmd_mode_action
         self.pdf_mode_action = pdf_mode_action
+        self.malware_mode_action = malware_mode_action
         
         # Bookmarks menu
         self.bookmarks_menu = self.menuBar().addMenu("&Bookmarks")
@@ -492,6 +505,12 @@ class MainWindow(QMainWindow):
         pdf_mode_action.setStatusTip("Switch to PDF reader mode")
         pdf_mode_action.triggered.connect(self.switch_to_pdf_mode)
         tools_menu.addAction(pdf_mode_action)
+        
+        malware_mode_action = QAction("🛡️ Malware Scanner Mode", self)
+        malware_mode_action.setShortcut("Ctrl+Shift+M")
+        malware_mode_action.setStatusTip("Switch to malware scanner mode")
+        malware_mode_action.triggered.connect(self.switch_to_malware_mode)
+        tools_menu.addAction(malware_mode_action)
         
         api_mode_action = QAction("🔧 API Tester Mode", self)
         api_mode_action.setShortcut("Ctrl+Shift+A")
@@ -625,6 +644,7 @@ class MainWindow(QMainWindow):
         self.pdf_mode_enabled = True
         self.api_mode_enabled = False
         self.cmd_mode_enabled = False
+        self.malware_mode_enabled = False
         self.status_info.setText("PDF Mode: Ready for document viewing")
         
         # Hide navigation toolbar
@@ -643,6 +663,7 @@ class MainWindow(QMainWindow):
         # Remove other mode tabs
         self.remove_api_tabs()
         self.remove_cmd_tabs()
+        self.remove_malware_tabs()
         
         # Add PDF reader tab
         self.add_pdf_tab()
@@ -653,6 +674,7 @@ class MainWindow(QMainWindow):
         self.api_mode_enabled = True
         self.cmd_mode_enabled = False
         self.pdf_mode_enabled = False
+        self.malware_mode_enabled = False
         self.status_info.setText("API Mode: Ready for testing")
         
         # Hide navigation toolbar (home, reload, URL bar)
@@ -671,6 +693,7 @@ class MainWindow(QMainWindow):
         # Remove other mode tabs
         self.remove_cmd_tabs()
         self.remove_pdf_tabs()
+        self.remove_malware_tabs()
         
         # Add API tab
         self.add_api_tab()
@@ -681,6 +704,7 @@ class MainWindow(QMainWindow):
         self.cmd_mode_enabled = True
         self.api_mode_enabled = False
         self.pdf_mode_enabled = False
+        self.malware_mode_enabled = False
         self.status_info.setText("Command Line Mode: Ready for terminal commands")
         
         # Hide navigation toolbar
@@ -699,9 +723,40 @@ class MainWindow(QMainWindow):
         # Remove other mode tabs
         self.remove_api_tabs()
         self.remove_pdf_tabs()
+        self.remove_malware_tabs()
         
         # Add command line tab
         self.add_cmd_tab()
+    
+    def switch_to_malware_mode(self):
+        """Switch to malware scanner mode"""
+        # Switch to malware scanner mode
+        self.malware_mode_enabled = True
+        self.api_mode_enabled = False
+        self.cmd_mode_enabled = False
+        self.pdf_mode_enabled = False
+        self.status_info.setText("Malware Scanner Mode: Ready for security analysis")
+        
+        # Hide navigation toolbar
+        self.navigation_toolbar.setVisible(False)
+        
+        # Hide top bar (sidebar toggle and title) in non-web modes
+        self.top_bar.setVisible(False)
+        
+        # Hide sidebar in non-web modes
+        if self.sidebar_widget:
+            self.sidebar_widget.setVisible(False)
+        
+        # Store current web tabs and remove them
+        self.store_and_remove_web_tabs()
+        
+        # Remove other mode tabs
+        self.remove_api_tabs()
+        self.remove_cmd_tabs()
+        self.remove_pdf_tabs()
+        
+        # Add malware scanner tab
+        self.add_malware_tab()
     
     def switch_to_web_mode(self):
         """Switch to web browser mode"""
@@ -709,6 +764,7 @@ class MainWindow(QMainWindow):
         self.api_mode_enabled = False
         self.cmd_mode_enabled = False
         self.pdf_mode_enabled = False
+        self.malware_mode_enabled = False
         self.status_info.setText("Web Mode: Ready for browsing")
         
         # Show navigation toolbar
@@ -725,6 +781,7 @@ class MainWindow(QMainWindow):
         self.remove_api_tabs()
         self.remove_cmd_tabs()
         self.remove_pdf_tabs()
+        self.remove_malware_tabs()
         self.restore_web_tabs()
     
     def store_and_remove_web_tabs(self):
@@ -857,6 +914,26 @@ class MainWindow(QMainWindow):
             self.tabs.removeTab(self.pdf_tab_index)
             self.pdf_tab_widget = None
             self.pdf_tab_index = None
+    
+    def add_malware_tab(self):
+        """Add a new malware scanner tab"""
+        # Create malware scanner widget
+        from malware_scanner_widget_functional import MalwareScannerWidget
+        self.malware_tab_widget = MalwareScannerWidget(self)
+        
+        # Add the malware scanner tab
+        tab_index = self.tabs.addTab(self.malware_tab_widget, "🛡️ Malware Scanner")
+        self.tabs.setCurrentIndex(tab_index)
+        
+        # Store reference to malware scanner tab
+        self.malware_tab_index = tab_index
+    
+    def remove_malware_tabs(self):
+        """Remove malware scanner tabs"""
+        if hasattr(self, 'malware_tab_index') and self.malware_tab_index is not None:
+            self.tabs.removeTab(self.malware_tab_index)
+            self.malware_tab_widget = None
+            self.malware_tab_index = None
     
     def show_clipboard_manager(self):
         """Show clipboard manager dialog"""
@@ -1406,7 +1483,7 @@ class MainWindow(QMainWindow):
     def update_zoom_for_tab(self):
         """Update zoom when switching tabs"""
         current_browser = self.tab_manager.get_current_browser()
-        if current_browser and not (self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled):
+        if current_browser and not (self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled or self.malware_mode_enabled):
             # Get current zoom factor from browser
             current_zoom_factor = current_browser.zoomFactor()
             

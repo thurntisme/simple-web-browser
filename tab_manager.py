@@ -311,6 +311,12 @@ class TabManager:
                 self.main_window.setWindowTitle(f"Terminal - {APP_NAME}")
                 self.main_window.status_title.setText("Command Line Mode")
                 self.main_window.status_info.setText("Ready for terminal commands")
+            elif current_widget and hasattr(self.main_window, 'malware_tab_widget') and current_widget == self.main_window.malware_tab_widget:
+                # This is the malware scanner tab
+                self.main_window.urlbar.setText("Malware Scanner Mode")
+                self.main_window.setWindowTitle(f"Malware Scanner - {APP_NAME}")
+                self.main_window.status_title.setText("Malware Scanner Mode")
+                self.main_window.status_info.setText("Ready for security analysis")
 
     def close_current_tab(self, i):
         """Close tab if more than minimum tabs exist"""
