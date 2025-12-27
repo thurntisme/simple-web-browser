@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
         tabs_container_layout.setContentsMargins(0, 0, 0, 0)
         tabs_container_layout.setSpacing(0)
         
-        # Create top bar with sidebar toggle button
+        # Create top bar with title only
         self.top_bar = QWidget()
         self.top_bar.setFixedHeight(32)
         self.top_bar.setStyleSheet("""
@@ -138,39 +138,8 @@ class MainWindow(QMainWindow):
         top_bar_layout.setContentsMargins(8, 4, 8, 4)
         top_bar_layout.setSpacing(8)
         
-        # Sidebar toggle button
-        self.sidebar_toggle_btn = QPushButton("📋")
-        self.sidebar_toggle_btn.setObjectName("sidebarToggleBtn")
-        self.sidebar_toggle_btn.setFixedSize(24, 24)
-        self.sidebar_toggle_btn.setStatusTip("Toggle sidebar")
-        self.sidebar_toggle_btn.setCheckable(True)
-        self.sidebar_toggle_btn.setChecked(False)
-        self.sidebar_toggle_btn.clicked.connect(self.toggle_sidebar)
-        self.sidebar_toggle_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ffffff;
-                border: 1px solid #ced4da;
-                border-radius: 4px;
-                font-size: 11px;
-                padding: 2px;
-            }
-            QPushButton:hover {
-                background-color: #e9ecef;
-                border-color: #adb5bd;
-            }
-            QPushButton:checked {
-                background-color: #007bff;
-                color: white;
-                border-color: #0056b3;
-            }
-            QPushButton:checked:hover {
-                background-color: #0056b3;
-            }
-        """)
-        top_bar_layout.addWidget(self.sidebar_toggle_btn)
-        
         # Add title label
-        self.title_label = QLabel("Browser Tabs (Sidebar Hidden)")
+        self.title_label = QLabel("Browser Tabs")
         self.title_label.setStyleSheet("""
             QLabel {
                 font-size: 11px;
@@ -288,6 +257,8 @@ class MainWindow(QMainWindow):
         home_btn.setStatusTip("Go home")
         home_btn.triggered.connect(self.navigate_home)
         self.navigation_toolbar.addAction(home_btn)
+        
+        self.navigation_toolbar.addSeparator()
 
         # Reload button with emoji icon
         reload_btn = QAction("🔄 Reload", self)
@@ -296,6 +267,14 @@ class MainWindow(QMainWindow):
         self.navigation_toolbar.addAction(reload_btn)
 
         self.navigation_toolbar.addSeparator()
+
+        # Sidebar toggle button (moved to navigation toolbar, same style as Home/Reload)
+        self.sidebar_toggle_action = QAction("📋 Sidebar", self)
+        self.sidebar_toggle_action.setStatusTip("Toggle sidebar")
+        self.sidebar_toggle_action.setCheckable(True)
+        self.sidebar_toggle_action.setChecked(False)
+        self.sidebar_toggle_action.triggered.connect(self.toggle_sidebar)
+        self.navigation_toolbar.addAction(self.sidebar_toggle_action)
 
         # URL bar
         self.urlbar = QLineEdit()
@@ -1707,7 +1686,7 @@ class MainWindow(QMainWindow):
     def toggle_sidebar(self):
         """Toggle sidebar visibility (only works in web mode)"""
         # Only allow sidebar toggle in web mode
-        if self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled:
+        if self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled or self.malware_mode_enabled:
             self.status_info.setText("Sidebar only available in Web Browser mode")
             QTimer.singleShot(2000, lambda: self.status_info.setText(""))
             return
@@ -1717,8 +1696,8 @@ class MainWindow(QMainWindow):
         if self.sidebar_widget:
             self.sidebar_widget.setVisible(self.sidebar_visible)
             
-        # Update button state
-        self.sidebar_toggle_btn.setChecked(self.sidebar_visible)
+        # Update action state
+        self.sidebar_toggle_action.setChecked(self.sidebar_visible)
         
         # Update title label to reflect sidebar state
         if hasattr(self, 'title_label'):
