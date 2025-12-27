@@ -428,33 +428,36 @@ class MainWindow(QMainWindow):
         color_picker_action.triggered.connect(self.show_color_picker_tool)
         tools_menu.addAction(color_picker_action)
         
+        # Code Formatters submenu
+        formatters_menu = tools_menu.addMenu("🔧 Code Formatters")
+        
         # JSON Formatter Tool action
         json_formatter_action = QAction("🔧 JSON Formatter", self)
         json_formatter_action.setShortcut("Ctrl+Shift+J")
         json_formatter_action.setStatusTip("Format, validate, and analyze JSON data")
         json_formatter_action.triggered.connect(self.show_json_formatter)
-        tools_menu.addAction(json_formatter_action)
+        formatters_menu.addAction(json_formatter_action)
         
         # HTML Formatter Tool action
         html_formatter_action = QAction("🌐 HTML Formatter", self)
         html_formatter_action.setShortcut("Ctrl+Shift+H")
         html_formatter_action.setStatusTip("Format, validate, and analyze HTML code")
         html_formatter_action.triggered.connect(self.show_html_formatter)
-        tools_menu.addAction(html_formatter_action)
+        formatters_menu.addAction(html_formatter_action)
         
         # CSS Formatter Tool action
         css_formatter_action = QAction("🎨 CSS Formatter", self)
         css_formatter_action.setShortcut("Ctrl+Shift+S")
         css_formatter_action.setStatusTip("Format, validate, and analyze CSS code")
         css_formatter_action.triggered.connect(self.show_css_formatter)
-        tools_menu.addAction(css_formatter_action)
+        formatters_menu.addAction(css_formatter_action)
         
         # JavaScript Formatter Tool action
         js_formatter_action = QAction("⚡ JavaScript Formatter", self)
         js_formatter_action.setShortcut("Ctrl+Shift+L")
         js_formatter_action.setStatusTip("Format, validate, and analyze JavaScript code")
         js_formatter_action.triggered.connect(self.show_js_formatter)
-        tools_menu.addAction(js_formatter_action)
+        formatters_menu.addAction(js_formatter_action)
         
         tools_menu.addSeparator()
         
