@@ -131,6 +131,10 @@ class MainWindow(QMainWindow):
         self.tabs.tabBarDoubleClicked.connect(self.tab_open_doubleclick)
         self.tabs.currentChanged.connect(self.current_tab_changed)
         self.tabs.setTabsClosable(False)
+        
+        # Hide tab bar completely (no tab titles visible)
+        self.tabs.tabBar().setVisible(False)
+        
         tabs_container_layout.addWidget(self.tabs)
         
         # Add tabs container to main layout
