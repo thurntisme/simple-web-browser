@@ -462,84 +462,10 @@ class MainWindow(QMainWindow):
         js_formatter_action.triggered.connect(self.show_js_formatter)
         formatters_menu.addAction(js_formatter_action)
         
-        tools_menu.addSeparator()
+
         
-        # Water Reminder action
-        water_action = QAction("💧 Water Reminder", self)
-        water_action.setShortcut("Ctrl+W")
-        water_action.setStatusTip("Manage water intake reminders")
-        water_action.triggered.connect(self.show_water_reminder)
-        tools_menu.addAction(water_action)
-        
-        # Screenshot submenu
-        screenshot_menu = tools_menu.addMenu("📸 Screenshot")
-        
-        viewport_action = QAction("📸 Current View", self)
-        viewport_action.setShortcut("Ctrl+Shift+S")
-        viewport_action.setStatusTip("Take a screenshot of the current viewport")
-        viewport_action.triggered.connect(self.take_viewport_screenshot)
-        screenshot_menu.addAction(viewport_action)
-        
-        fullpage_action = QAction("📄 Full Page", self)
-        fullpage_action.setShortcut("Ctrl+Shift+F")
-        fullpage_action.setStatusTip("Take a screenshot of the entire page")
-        fullpage_action.triggered.connect(self.take_fullpage_screenshot)
-        screenshot_menu.addAction(fullpage_action)
-        
-        # Broken link scanner
-        link_scanner_action = QAction("🔗 Scan for Broken Links", self)
-        link_scanner_action.setShortcut("Ctrl+Shift+L")
-        link_scanner_action.setStatusTip("Scan current page for broken links")
-        link_scanner_action.triggered.connect(self.scan_broken_links)
-        tools_menu.addAction(link_scanner_action)
-        
-        tools_menu.addSeparator()
-        
-        # Mode switching actions
-        pdf_mode_action = QAction("📄 PDF Reader Mode", self)
-        pdf_mode_action.setShortcut("Ctrl+Shift+P")
-        pdf_mode_action.setStatusTip("Switch to PDF reader mode")
-        pdf_mode_action.triggered.connect(self.switch_to_pdf_mode)
-        tools_menu.addAction(pdf_mode_action)
-        
-        malware_mode_action = QAction("🛡️ Malware Scanner Mode", self)
-        malware_mode_action.setShortcut("Ctrl+Shift+M")
-        malware_mode_action.setStatusTip("Switch to malware scanner mode")
-        malware_mode_action.triggered.connect(self.switch_to_malware_mode)
-        tools_menu.addAction(malware_mode_action)
-        
-        api_mode_action = QAction("🔧 API Tester Mode", self)
-        api_mode_action.setShortcut("Ctrl+Shift+A")
-        api_mode_action.setStatusTip("Switch to API testing mode")
-        api_mode_action.triggered.connect(self.switch_to_api_mode)
-        tools_menu.addAction(api_mode_action)
-        
-        cmd_mode_action = QAction("💻 Command Line Mode", self)
-        cmd_mode_action.setShortcut("Ctrl+Shift+C")
-        cmd_mode_action.setStatusTip("Switch to command line mode")
-        cmd_mode_action.triggered.connect(self.switch_to_cmd_mode)
-        tools_menu.addAction(cmd_mode_action)
-        
-        web_mode_action = QAction("🌐 Web Browser Mode", self)
-        web_mode_action.setShortcut("Ctrl+Shift+W")
-        web_mode_action.setStatusTip("Switch to web browser mode")
-        web_mode_action.triggered.connect(self.switch_to_web_mode)
-        tools_menu.addAction(web_mode_action)
-        
-        tools_menu.addSeparator()
-        
-        # Sidebar actions
-        sidebar_toggle_action = QAction("📋 Toggle Sidebar", self)
-        sidebar_toggle_action.setShortcut("Ctrl+B")
-        sidebar_toggle_action.setStatusTip("Show/Hide sidebar")
-        sidebar_toggle_action.triggered.connect(self.toggle_sidebar)
-        tools_menu.addAction(sidebar_toggle_action)
-        
-        add_to_sidebar_action = QAction("➕ Add Current Page to Sidebar", self)
-        add_to_sidebar_action.setShortcut("Ctrl+Shift+B")
-        add_to_sidebar_action.setStatusTip("Add current page to sidebar")
-        add_to_sidebar_action.triggered.connect(self.add_current_to_sidebar)
-        tools_menu.addAction(add_to_sidebar_action)
+
+
 
         # Profile menu
         self.profile_menu = self.menuBar().addMenu("&Profile")
