@@ -393,33 +393,36 @@ class MainWindow(QMainWindow):
         clipboard_action.triggered.connect(self.show_clipboard_manager)
         tools_menu.addAction(clipboard_action)
         
+        # Network Tools submenu
+        network_menu = tools_menu.addMenu("🌐 Network Tools")
+        
         # Ping Tool action
         ping_action = QAction("🏓 Ping Tool", self)
         ping_action.setShortcut("Ctrl+P")
         ping_action.setStatusTip("Test domain/IP connectivity")
         ping_action.triggered.connect(self.show_ping_tool)
-        tools_menu.addAction(ping_action)
+        network_menu.addAction(ping_action)
         
         # Curl Tool action
         curl_action = QAction("🌐 Curl Tool", self)
         curl_action.setShortcut("Ctrl+U")
         curl_action.setStatusTip("Make HTTP requests and test APIs")
         curl_action.triggered.connect(self.show_curl_tool)
-        tools_menu.addAction(curl_action)
+        network_menu.addAction(curl_action)
         
         # DNS Tool action
         dns_action = QAction("🌐 DNS/Nameserver Check", self)
         dns_action.setShortcut("Ctrl+D")
         dns_action.setStatusTip("Check DNS records and nameserver information")
         dns_action.triggered.connect(self.show_dns_tool)
-        tools_menu.addAction(dns_action)
+        network_menu.addAction(dns_action)
         
         # Speed Test Tool action
         speed_test_action = QAction("⚡ Speed Test", self)
         speed_test_action.setShortcut("Ctrl+Shift+S")
         speed_test_action.setStatusTip("Test network download/upload speeds")
         speed_test_action.triggered.connect(self.show_speed_test_tool)
-        tools_menu.addAction(speed_test_action)
+        network_menu.addAction(speed_test_action)
         
         # Color Picker Tool action
         color_picker_action = QAction("🎨 Color Picker", self)
