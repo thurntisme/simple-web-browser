@@ -29,6 +29,7 @@ from js_formatter_tool import show_js_formatter
 from css_formatter_tool import show_css_formatter
 from js_formatter_tool import show_js_formatter
 from lunar_calendar_tool import show_lunar_calendar
+from tracker_detector import TrackerDetector, show_tracker_detection_dialog
 import ui_helpers
 import styles
 
@@ -103,6 +104,10 @@ class MainWindow(QMainWindow):
         
         # Initialize water reminder system
         self.water_reminder = WaterReminderManager(self.profile_manager, self)
+        
+        # Initialize tracker detector
+        self.tracker_detector = TrackerDetector(self)
+        self.tracker_detector.trackers_detected.connect(self.show_tracker_results)
         
         # Add lunar status widget to status bar (before water reminder)
         self.setup_lunar_status_widget()
@@ -246,6 +251,14 @@ class MainWindow(QMainWindow):
         self.ads_block_btn.setStatusTip("Ad blocking tools")
         self.ads_block_btn.clicked.connect(self.show_ads_block_menu)
         self.navigation_toolbar.addWidget(self.ads_block_btn)
+        
+        # Tracker Detection button
+        self.tracker_btn = QPushButton("🔍 Trackers")
+        self.tracker_btn.setObjectName("trackerBtn")
+        self.tracker_btn.setMaximumWidth(80)
+        self.tracker_btn.setStatusTip("Detect web trackers on current page")
+        self.tracker_btn.clicked.connect(self.detect_trackers)
+        self.navigation_toolbar.addWidget(self.tracker_btn)
         
         # Open with browser dropdown button
         self.open_with_btn = QPushButton("🌐")
@@ -409,6 +422,13 @@ class MainWindow(QMainWindow):
         color_picker_action.setStatusTip("Advanced color picker and palette generator")
         color_picker_action.triggered.connect(self.show_color_picker_tool)
         tools_menu.addAction(color_picker_action)
+        
+        # Tracker Detection Tool action
+        tracker_detection_action = QAction("🔍 Tracker Detection", self)
+        tracker_detection_action.setShortcut("Ctrl+Shift+T")
+        tracker_detection_action.setStatusTip("See who is tracking you on the web")
+        tracker_detection_action.triggered.connect(self.detect_trackers)
+        tools_menu.addAction(tracker_detection_action)
         
         # Code Formatters submenu
         formatters_menu = tools_menu.addMenu("🔧 Code Formatters")
@@ -933,6 +953,59 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.lunar_calendar_dialog.raise_()
             self.lunar_calendar_dialog.activateWindow()
+    
+    def detect_trackers(self):
+        """Detect trackers on the current page"""
+        # Only allow tracker detection in web mode
+        if self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled or self.malware_mode_enabled:
+            self.status_info.setText("🔍 Tracker detection only available in Web Browser mode")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+            return
+        
+        current_browser = self.get_current_browser()
+        if current_browser:
+            current_url = current_browser.url().toString()
+            if current_url and current_url != "about:blank" and not current_url.startswith("data:"):
+                self.status_info.setText("🔍 Analyzing page for trackers...")
+                self.tracker_detector.detect_trackers_on_page(current_browser.page())
+            else:
+                self.status_info.setText("❌ Cannot analyze trackers on this page")
+                QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+        else:
+            self.status_info.setText("❌ No active web page for tracker analysis")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
+    
+    def show_tracker_results(self, tracking_data):
+        """Show tracker detection results"""
+        try:
+            # Update status with results
+            summary = tracking_data.get('summary', {})
+            total_trackers = summary.get('total_trackers', 0)
+            risk_level = summary.get('risk_level', 'Low')
+            
+            if total_trackers > 0:
+                self.status_info.setText(f"🔍 Found {total_trackers} trackers ({risk_level} risk)")
+            else:
+                self.status_info.setText("✅ No trackers detected on this page")
+            
+            # Show detailed results dialog
+            if not hasattr(self, 'tracker_dialog') or self.tracker_dialog is None or not self.tracker_dialog.isVisible():
+                self.tracker_dialog = show_tracker_detection_dialog(tracking_data, self)
+                self.tracker_dialog.show()
+            else:
+                # Update existing dialog with new data
+                self.tracker_dialog.tracking_data = tracking_data
+                self.tracker_dialog.populate_data()
+                self.tracker_dialog.raise_()
+                self.tracker_dialog.activateWindow()
+            
+            # Clear status message after 5 seconds
+            QTimer.singleShot(5000, lambda: self.status_info.setText(""))
+            
+        except Exception as e:
+            print(f"Error showing tracker results: {e}")
+            self.status_info.setText("❌ Error displaying tracker results")
+            QTimer.singleShot(2000, lambda: self.status_info.setText(""))
     
     def show_water_reminder(self):
         """Show water reminder dialog"""
