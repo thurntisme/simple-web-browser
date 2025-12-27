@@ -14,6 +14,9 @@ plyer>=2.1.0
 # Network Speed Test Tool
 requests>=2.25.0
 
+# Lunar Calendar Extension
+lunardate>=0.2.0
+
 # Platform-specific notification packages (install conditionally)
 # Windows only:
 # win10toast>=0.9

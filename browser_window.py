@@ -27,6 +27,8 @@ from html_formatter_tool import show_html_formatter
 from css_formatter_tool import show_css_formatter
 from js_formatter_tool import show_js_formatter
 from css_formatter_tool import show_css_formatter
+from js_formatter_tool import show_js_formatter
+from lunar_calendar_tool import show_lunar_calendar
 import ui_helpers
 import styles
 
@@ -462,10 +464,17 @@ class MainWindow(QMainWindow):
         js_formatter_action.triggered.connect(self.show_js_formatter)
         formatters_menu.addAction(js_formatter_action)
         
-
+        tools_menu.addSeparator()
         
-
-
+        # Extensions submenu
+        extensions_menu = tools_menu.addMenu("🧩 Extensions")
+        
+        # Lunar Calendar Tool action
+        lunar_calendar_action = QAction("🌙 Lunar Calendar", self)
+        lunar_calendar_action.setShortcut("Ctrl+Shift+M")
+        lunar_calendar_action.setStatusTip("View lunar phases, Chinese calendar, and astronomical events")
+        lunar_calendar_action.triggered.connect(self.show_lunar_calendar)
+        extensions_menu.addAction(lunar_calendar_action)
 
         # Profile menu
         self.profile_menu = self.menuBar().addMenu("&Profile")
@@ -938,6 +947,15 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.js_formatter_dialog.raise_()
             self.js_formatter_dialog.activateWindow()
+    
+    def show_lunar_calendar(self):
+        """Show lunar calendar dialog"""
+        if not hasattr(self, 'lunar_calendar_dialog') or self.lunar_calendar_dialog is None or not self.lunar_calendar_dialog.isVisible():
+            self.lunar_calendar_dialog = show_lunar_calendar(self)
+        else:
+            # Bring existing dialog to front
+            self.lunar_calendar_dialog.raise_()
+            self.lunar_calendar_dialog.activateWindow()
     
     def show_water_reminder(self):
         """Show water reminder dialog"""
