@@ -379,50 +379,65 @@ class TabManager:
             
             # Add broken link scanner (only for web pages)
             if current_url and current_url != "about:blank" and not current_url.startswith("data:"):
+                # Create Scan Tools submenu
+                scan_menu = menu.addMenu("🔍 Scan Tools")
+                
                 link_scanner_action = QAction("🔗 Scan for Broken Links", self.main_window)
                 link_scanner_action.triggered.connect(lambda: self.scan_broken_links(browser))
-                menu.addAction(link_scanner_action)
+                scan_menu.addAction(link_scanner_action)
                 
-        # Add script scanner
                 script_scanner_action = QAction("📜 Scan Scripts (Inline, External)", self.main_window)
                 script_scanner_action.triggered.connect(lambda: self.scan_scripts(browser))
-                menu.addAction(script_scanner_action)
+                scan_menu.addAction(script_scanner_action)
                 
                 # Add advanced script analysis
                 advanced_script_action = QAction("🔍 Advanced Script Analysis", self.main_window)
                 advanced_script_action.triggered.connect(lambda: self.advanced_script_analysis(browser))
-                menu.addAction(advanced_script_action)
+                scan_menu.addAction(advanced_script_action)
                 
-                menu.addSeparator()
+                scan_menu.addSeparator()
                 
                 # Add ad blocker features
                 ad_scanner_action = QAction("🚫 Scan & Remove Ads", self.main_window)
                 ad_scanner_action.triggered.connect(lambda: self.scan_and_remove_ads(browser))
-                menu.addAction(ad_scanner_action)
+                scan_menu.addAction(ad_scanner_action)
                 
                 ad_analysis_action = QAction("📊 Ad Analysis Report", self.main_window)
                 ad_analysis_action.triggered.connect(lambda: self.analyze_ads(browser))
-                menu.addAction(ad_analysis_action)
+                scan_menu.addAction(ad_analysis_action)
                 
                 # Add page speed analyzer
                 speed_analyzer_action = QAction("⚡ Page Speed Analyzer", self.main_window)
                 speed_analyzer_action.triggered.connect(lambda: self.analyze_page_speed(browser))
-                menu.addAction(speed_analyzer_action)
-                
-                # Add Privacy Score feature
-                privacy_score_action = QAction("🔒 Privacy Score", self.main_window)
-                privacy_score_action.triggered.connect(lambda: self.analyze_privacy_score(browser))
-                menu.addAction(privacy_score_action)
-                
-                # Add Security Score feature
+                scan_menu.addAction(speed_analyzer_action)
                 security_score_action = QAction("🛡️ Security Score", self.main_window)
                 security_score_action.triggered.connect(lambda: self.analyze_security_score(browser))
-                menu.addAction(security_score_action)
+                scan_menu.addAction(security_score_action)
+                
+                menu.addSeparator()
+                
+                # Create Security Tools submenu
+                security_menu = menu.addMenu("🛡️ Security Tools")
+                
+                # Move Privacy Score to Security Tools
+                privacy_score_action = QAction("🔒 Privacy Score", self.main_window)
+                privacy_score_action.triggered.connect(lambda: self.analyze_privacy_score(browser))
+                security_menu.addAction(privacy_score_action)
+                
+                # Move Security Score to Security Tools
+                security_score_action = QAction("🛡️ Security Score", self.main_window)
+                security_score_action.triggered.connect(lambda: self.analyze_security_score(browser))
+                security_menu.addAction(security_score_action)
                 
                 # Add Header Policy Simulator
                 header_policy_action = QAction("🛡️ Header Policy Simulator", self.main_window)
                 header_policy_action.triggered.connect(lambda: self.show_header_policy_simulator(browser))
-                menu.addAction(header_policy_action)
+                security_menu.addAction(header_policy_action)
+                
+                # Add CSRF/CORS Visual Tester feature
+                csrf_cors_tester_action = QAction("🛡️ CSRF/CORS Visual Tester", self.main_window)
+                csrf_cors_tester_action.triggered.connect(lambda: self.test_csrf_cors(browser))
+                security_menu.addAction(csrf_cors_tester_action)
                 
                 # Add Network Request Timeline feature
                 network_timeline_action = QAction("📊 Network Request Timeline", self.main_window)
@@ -434,20 +449,18 @@ class TabManager:
                 seo_analyzer_action.triggered.connect(lambda: self.analyze_seo(browser))
                 menu.addAction(seo_analyzer_action)
                 
+                # Create Detector Tools submenu
+                detector_menu = menu.addMenu("🔍 Detector Tools")
+                
                 # Add Font Detector feature
                 font_detector_action = QAction("🔤 Font Detector", self.main_window)
                 font_detector_action.triggered.connect(lambda: self.detect_fonts(browser))
-                menu.addAction(font_detector_action)
+                detector_menu.addAction(font_detector_action)
                 
                 # Add Technology Detector feature
                 tech_detector_action = QAction("🔧 Technology Detector", self.main_window)
                 tech_detector_action.triggered.connect(lambda: self.detect_technologies(browser))
-                menu.addAction(tech_detector_action)
-                
-                # Add CSRF/CORS Visual Tester feature
-                csrf_cors_tester_action = QAction("🛡️ CSRF/CORS Visual Tester", self.main_window)
-                csrf_cors_tester_action.triggered.connect(lambda: self.test_csrf_cors(browser))
-                menu.addAction(csrf_cors_tester_action)
+                detector_menu.addAction(tech_detector_action)
                 
                 # Add Store Management feature
                 store_management_action = QAction("💾 Store Management", self.main_window)
