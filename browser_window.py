@@ -94,6 +94,9 @@ class MainWindow(QMainWindow):
         # Setup zoom keyboard shortcuts
         self.setup_zoom_shortcuts()
         
+        # Initialize zoom controls
+        self.setup_zoom_controls()
+        
         # Initialize managers that depend on UI
         self.tab_manager = TabManager(self)
         self.navigation_manager = NavigationManager(self)
@@ -176,47 +179,9 @@ class MainWindow(QMainWindow):
         
         self.status_info = QLabel()
         self.status.addPermanentWidget(self.status_info)
-        
-        # Zoom controls (bottom right)
-        self.setup_zoom_controls()
     
     def setup_zoom_controls(self):
-        """Setup zoom controls in the status bar"""
-        # Create zoom widget container
-        zoom_widget = QWidget()
-        zoom_layout = QHBoxLayout(zoom_widget)
-        zoom_layout.setContentsMargins(5, 0, 5, 0)
-        zoom_layout.setSpacing(2)
-        
-        # Zoom out button
-        self.zoom_out_btn = QPushButton("🔍-")
-        self.zoom_out_btn.setMaximumWidth(20)
-        self.zoom_out_btn.setMaximumHeight(20)
-        self.zoom_out_btn.setToolTip("Zoom Out (Ctrl+-)")
-        self.zoom_out_btn.clicked.connect(self.zoom_out)
-        zoom_layout.addWidget(self.zoom_out_btn)
-        
-        # Zoom level display
-        self.zoom_level_label = QLabel("100%")
-        self.zoom_level_label.setMinimumWidth(40)
-        self.zoom_level_label.setMaximumWidth(40)
-        self.zoom_level_label.setAlignment(Qt.AlignCenter)
-        self.zoom_level_label.setToolTip("Current zoom level - Click to reset to 100%")
-        self.zoom_level_label.setStyleSheet("QLabel { border: 1px solid #ccc; padding: 2px; background-color: #f8f8f8; }")
-        self.zoom_level_label.mousePressEvent = lambda event: self.reset_zoom()
-        zoom_layout.addWidget(self.zoom_level_label)
-        
-        # Zoom in button
-        self.zoom_in_btn = QPushButton("🔍+")
-        self.zoom_in_btn.setMaximumWidth(20)
-        self.zoom_in_btn.setMaximumHeight(20)
-        self.zoom_in_btn.setToolTip("Zoom In (Ctrl++)")
-        self.zoom_in_btn.clicked.connect(self.zoom_in)
-        zoom_layout.addWidget(self.zoom_in_btn)
-        
-        # Add zoom widget to status bar (permanent = right side)
-        self.status.addPermanentWidget(zoom_widget)
-        
+        """Initialize zoom controls (now managed in settings dialog)"""
         # Initialize zoom level
         self.current_zoom = 1.0  # 100%
         self.zoom_levels = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0]
@@ -1430,22 +1395,15 @@ class MainWindow(QMainWindow):
         """Apply current zoom level to the active browser"""
         self.current_zoom = self.zoom_levels[self.current_zoom_index]
         
-        # Update zoom level display
-        zoom_percentage = int(self.current_zoom * 100)
-        self.zoom_level_label.setText(f"{zoom_percentage}%")
-        
         # Apply zoom to current browser
         current_browser = self.tab_manager.get_current_browser()
         if current_browser and not (self.api_mode_enabled or self.cmd_mode_enabled or self.pdf_mode_enabled):
             current_browser.setZoomFactor(self.current_zoom)
             
             # Show zoom feedback in status bar
+            zoom_percentage = int(self.current_zoom * 100)
             self.status_info.setText(f"🔍 Zoom: {zoom_percentage}%")
             QTimer.singleShot(1500, lambda: self.status_info.setText(""))
-        
-        # Update zoom controls state
-        self.zoom_out_btn.setEnabled(self.current_zoom_index > 0)
-        self.zoom_in_btn.setEnabled(self.current_zoom_index < len(self.zoom_levels) - 1)
     
     def setup_zoom_shortcuts(self):
         """Setup keyboard shortcuts for zoom"""
@@ -1483,14 +1441,6 @@ class MainWindow(QMainWindow):
             
             self.current_zoom_index = closest_index
             self.current_zoom = self.zoom_levels[closest_index]
-            
-            # Update display
-            zoom_percentage = int(self.current_zoom * 100)
-            self.zoom_level_label.setText(f"{zoom_percentage}%")
-            
-            # Update button states
-            self.zoom_out_btn.setEnabled(self.current_zoom_index > 0)
-            self.zoom_in_btn.setEnabled(self.current_zoom_index < len(self.zoom_levels) - 1)
     
     # UI update methods
     def update_title(self, browser):

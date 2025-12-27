@@ -160,8 +160,9 @@ def demo_lunar_calendar():
     print("1. Start browser: python3 main.py")
     print("2. Look for date widget in status bar: Sat 27 Dec (11-08) 🌙")
     print("3. Click date widget for quick access to lunar calendar")
-    print("4. Or go to: Tools → Extensions → 🌙 Lunar Calendar")
-    print("5. Or press: Ctrl+Shift+M")
+    print("4. For zoom controls: Help → Browser Settings → Appearance")
+    print("5. Or go to: Tools → Extensions → 🌙 Lunar Calendar")
+    print("6. Or press: Ctrl+Shift+M")
     
     print()
     print("📖 For complete documentation, see:")

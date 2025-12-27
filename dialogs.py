@@ -124,6 +124,41 @@ class BrowserSettingsDialog(QDialog):
         
         font_layout.addLayout(font_size_layout)
         
+        # Zoom controls
+        zoom_layout = QHBoxLayout()
+        zoom_layout.addWidget(QLabel("Zoom Level:"))
+        
+        # Zoom out button
+        self.zoom_out_btn = QPushButton("🔍-")
+        self.zoom_out_btn.setMaximumWidth(30)
+        self.zoom_out_btn.setToolTip("Zoom Out (Ctrl+-)")
+        self.zoom_out_btn.clicked.connect(self.zoom_out)
+        zoom_layout.addWidget(self.zoom_out_btn)
+        
+        # Zoom level display
+        self.zoom_level_label = QLabel("100%")
+        self.zoom_level_label.setMinimumWidth(50)
+        self.zoom_level_label.setAlignment(Qt.AlignCenter)
+        self.zoom_level_label.setStyleSheet("QLabel { border: 1px solid #ccc; padding: 4px; background-color: #f8f8f8; }")
+        zoom_layout.addWidget(self.zoom_level_label)
+        
+        # Zoom in button
+        self.zoom_in_btn = QPushButton("🔍+")
+        self.zoom_in_btn.setMaximumWidth(30)
+        self.zoom_in_btn.setToolTip("Zoom In (Ctrl++)")
+        self.zoom_in_btn.clicked.connect(self.zoom_in)
+        zoom_layout.addWidget(self.zoom_in_btn)
+        
+        # Reset zoom button
+        reset_zoom_btn = QPushButton("Reset")
+        reset_zoom_btn.setToolTip("Reset zoom to 100%")
+        reset_zoom_btn.clicked.connect(self.reset_zoom)
+        zoom_layout.addWidget(reset_zoom_btn)
+        
+        zoom_layout.addStretch()
+        
+        font_layout.addLayout(zoom_layout)
+        
         font_group.setLayout(font_layout)
         layout.addWidget(font_group)
         
@@ -141,6 +176,58 @@ class BrowserSettingsDialog(QDialog):
         layout.addLayout(button_layout)
         
         self.setLayout(layout)
+        
+        # Initialize zoom controls
+        self.current_zoom = parent.current_zoom if hasattr(parent, 'current_zoom') else 1.0
+        self.zoom_levels = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0]
+        self.current_zoom_index = self.zoom_levels.index(self.current_zoom) if self.current_zoom in self.zoom_levels else self.zoom_levels.index(1.0)
+        self.update_zoom_display()
+    
+    def zoom_in(self):
+        """Zoom in"""
+        if self.current_zoom_index < len(self.zoom_levels) - 1:
+            self.current_zoom_index += 1
+            self.apply_zoom()
+    
+    def zoom_out(self):
+        """Zoom out"""
+        if self.current_zoom_index > 0:
+            self.current_zoom_index -= 1
+            self.apply_zoom()
+    
+    def reset_zoom(self):
+        """Reset zoom to 100%"""
+        self.current_zoom_index = self.zoom_levels.index(1.0)
+        self.apply_zoom()
+    
+    def apply_zoom(self):
+        """Apply current zoom level"""
+        self.current_zoom = self.zoom_levels[self.current_zoom_index]
+        self.update_zoom_display()
+        
+        # Apply zoom to parent window's current browser
+        if hasattr(self.parent_window, 'get_current_browser'):
+            current_browser = self.parent_window.get_current_browser()
+            if current_browser and not (
+                getattr(self.parent_window, 'api_mode_enabled', False) or 
+                getattr(self.parent_window, 'cmd_mode_enabled', False) or 
+                getattr(self.parent_window, 'pdf_mode_enabled', False)
+            ):
+                current_browser.setZoomFactor(self.current_zoom)
+        
+        # Update parent window's zoom state
+        if hasattr(self.parent_window, 'current_zoom'):
+            self.parent_window.current_zoom = self.current_zoom
+            self.parent_window.current_zoom_index = self.current_zoom_index
+    
+    def update_zoom_display(self):
+        """Update zoom level display"""
+        zoom_percentage = int(self.current_zoom * 100)
+        self.zoom_level_label.setText(f"{zoom_percentage}%")
+        
+        # Update button states
+        self.zoom_out_btn.setEnabled(self.current_zoom_index > 0)
+        self.zoom_in_btn.setEnabled(self.current_zoom_index < len(self.zoom_levels) - 1)
     
     def toggle_welcome_page(self, state):
         """Toggle welcome page checkbox"""
