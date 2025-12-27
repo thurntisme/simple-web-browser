@@ -38,6 +38,7 @@ from navigation import NavigationManager
 from pdf_viewer import PDFViewerWidget
 from sidebar_widget import SidebarWidget
 from water_reminder import WaterReminderManager, WaterReminderWidget
+from lunar_status_widget import LunarStatusWidget
 
 
 class MainWindow(QMainWindow):
@@ -99,6 +100,9 @@ class MainWindow(QMainWindow):
         
         # Initialize water reminder system
         self.water_reminder = WaterReminderManager(self.profile_manager, self)
+        
+        # Add lunar status widget to status bar (before water reminder)
+        self.setup_lunar_status_widget()
         
         # Add water reminder widget to status bar
         self.setup_water_reminder_widget()
@@ -223,6 +227,14 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'water_reminder'):
             self.water_widget = WaterReminderWidget(self.water_reminder, self)
             self.status.addPermanentWidget(self.water_widget)
+    
+    def setup_lunar_status_widget(self):
+        """Setup lunar status widget in the status bar"""
+        self.lunar_status_widget = LunarStatusWidget(self)
+        # Connect the signal to open lunar calendar
+        self.lunar_status_widget.lunar_calendar_requested.connect(self.show_lunar_calendar)
+        # Add to status bar (permanent widgets appear on the right)
+        self.status.addPermanentWidget(self.lunar_status_widget)
 
     def setup_toolbar(self):
         """Setup navigation toolbar with icons"""
