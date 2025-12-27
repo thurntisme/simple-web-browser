@@ -361,6 +361,15 @@ class TabManager:
         
         menu.addSeparator()
         
+        # Add "Set as Homepage" feature (only for valid web pages)
+        if (current_url and current_url != "about:blank" and not current_url.startswith("data:") and 
+            not (self.main_window.api_mode_enabled or self.main_window.cmd_mode_enabled or self.main_window.pdf_mode_enabled)):
+            homepage_action = QAction("🏠 Set as Homepage", self.main_window)
+            homepage_action.triggered.connect(lambda: self.set_as_homepage(browser))
+            menu.addAction(homepage_action)
+            
+            menu.addSeparator()
+        
         # Add screenshot options (only in web browser mode)
         if not (self.main_window.api_mode_enabled or self.main_window.cmd_mode_enabled or self.main_window.pdf_mode_enabled):
             screenshot_menu = menu.addMenu("📸 Screenshot")
@@ -485,6 +494,55 @@ class TabManager:
         current_widget = self.tabs.currentWidget()
         if isinstance(current_widget, QSplitter):
             self.toggle_dev_tools(current_widget)
+    
+    def set_as_homepage(self, browser):
+        """Set the current page as homepage"""
+        try:
+            current_url = browser.url().toString()
+            current_title = browser.page().title()
+            
+            if not current_url or current_url == "about:blank" or current_url.startswith("data:"):
+                self.main_window.status_info.setText("❌ Cannot set this page as homepage")
+                QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
+                return
+            
+            # Show confirmation dialog
+            from PyQt5.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self.main_window,
+                "Set as Homepage",
+                f"Set this page as your homepage?\n\n"
+                f"Title: {current_title}\n"
+                f"URL: {current_url}\n\n"
+                f"This will replace your current homepage setting.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            
+            if reply == QMessageBox.Yes:
+                # Save the URL as homepage in config
+                self.main_window.config_manager.set("home_url", current_url)
+                self.main_window.config_manager.set("use_welcome_page", False)  # Disable welcome page
+                self.main_window.config_manager.save()
+                
+                # Show success message
+                self.main_window.status_info.setText(f"🏠 Homepage set to: {current_title}")
+                QTimer.singleShot(4000, lambda: self.main_window.status_info.setText(""))
+                
+                # Show info message
+                QMessageBox.information(
+                    self.main_window,
+                    "Homepage Updated",
+                    f"Homepage has been set to:\n{current_title}\n\n"
+                    f"This will be loaded when you:\n"
+                    f"• Click the Home button\n"
+                    f"• Open a new tab (if configured)\n"
+                    f"• Start the browser"
+                )
+            
+        except Exception as e:
+            self.main_window.status_info.setText(f"❌ Error setting homepage: {str(e)}")
+            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
     
     def take_screenshot(self, browser, screenshot_type="viewport"):
         """Take a screenshot of the current web page
