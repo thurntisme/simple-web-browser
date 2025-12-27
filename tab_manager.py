@@ -11,29 +11,43 @@ from constants import *
 import browser_utils
 
 
-class NetworkTimelineWidget(QWidget):
+class TabManager:
     """Custom widget for displaying network request timeline waterfall chart"""
     
     def __init__(self):
         super().__init__()
         self.requests = []
         self.setMinimumHeight(400)
-        self.setStyleSheet("background-color: white;")
+        self.setStyleSheet("background-color: white; border: 1px solid #e0e0e0;")
         
         # Timeline settings
-        self.row_height = 25
-        self.left_margin = 200
+        self.row_height = 30
+        self.left_margin = 250
         self.right_margin = 50
-        self.top_margin = 30
+        self.top_margin = 40
         self.bottom_margin = 20
         
-        # Colors for different phases
+        # Enhanced colors for different phases
         self.colors = {
-            'dns': QColor(255, 193, 7),      # Yellow - DNS lookup
-            'tcp': QColor(40, 167, 69),      # Green - TCP connect
-            'tls': QColor(220, 53, 69),      # Red - TLS handshake
-            'request': QColor(0, 123, 255),  # Blue - Request
-            'response': QColor(108, 117, 125) # Gray - Response
+            'dns': QColor(255, 193, 7, 180),      # Yellow - DNS lookup
+            'tcp': QColor(40, 167, 69, 180),      # Green - TCP connect
+            'tls': QColor(220, 53, 69, 180),      # Red - TLS handshake
+            'request': QColor(0, 123, 255, 180),  # Blue - Request
+            'response': QColor(108, 117, 125, 180), # Gray - Response
+            'waiting': QColor(255, 152, 0, 180),  # Orange - Waiting
+            'download': QColor(76, 175, 80, 180)  # Light Green - Download
+        }
+        
+        # Request type colors
+        self.type_colors = {
+            'document': QColor(33, 150, 243),
+            'stylesheet': QColor(156, 39, 176),
+            'script': QColor(255, 152, 0),
+            'image': QColor(76, 175, 80),
+            'font': QColor(121, 85, 72),
+            'xhr': QColor(244, 67, 54),
+            'fetch': QColor(244, 67, 54),
+            'other': QColor(96, 125, 139)
         }
     
     def update_requests(self, requests):
@@ -50,18 +64,31 @@ class NetworkTimelineWidget(QWidget):
     def update_size(self):
         """Update widget size based on number of requests"""
         if self.requests:
-            height = self.top_margin + len(self.requests) * self.row_height + self.bottom_margin
+            height = self.top_margin + len(self.requests) * self.row_height + self.bottom_margin + 50
             self.setMinimumHeight(max(400, height))
     
     def paintEvent(self, event):
-        """Paint the waterfall chart"""
+        """Paint the enhanced waterfall chart"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
         if not self.requests:
-            # Draw empty state
+            # Draw enhanced empty state
             painter.setPen(QPen(QColor(108, 117, 125), 1))
-            painter.drawText(self.rect(), Qt.AlignCenter, "No network requests recorded yet.\nClick 'Start Recording' to begin monitoring.")
+            font = painter.font()
+            font.setPointSize(12)
+            painter.setFont(font)
+            
+            empty_text = ("🌐 Network Request Timeline\n\n"
+                         "No network requests recorded yet.\n"
+                         "Click 'Start Recording' to begin monitoring network activity.\n\n"
+                         "This will show:\n"
+                         "• Request timing breakdown\n"
+                         "• Response status codes\n"
+                         "• File sizes and types\n"
+                         "• Waterfall visualization")
+            
+            painter.drawText(self.rect(), Qt.AlignCenter, empty_text)
             return
         
         # Calculate time range
@@ -82,39 +109,63 @@ class NetworkTimelineWidget(QWidget):
         chart_width = self.width() - self.left_margin - self.right_margin
         chart_height = len(self.requests) * self.row_height
         
-        # Draw time axis
-        self.draw_time_axis(painter, min_time, max_time, time_range, chart_width)
+        # Draw enhanced time axis
+        self.draw_enhanced_time_axis(painter, min_time, max_time, time_range, chart_width)
         
-        # Draw requests
+        # Draw grid lines
+        self.draw_grid_lines(painter, chart_width, chart_height)
+        
+        # Draw requests with enhanced styling
         for i, request in enumerate(self.requests):
             y = self.top_margin + i * self.row_height
             self.draw_request_bar(painter, request, y, min_time, time_range, chart_width)
             self.draw_request_label(painter, request, y)
     
-    def draw_time_axis(self, painter, min_time, max_time, time_range, chart_width):
-        """Draw the time axis at the top"""
-        painter.setPen(QPen(QColor(108, 117, 125), 1))
+    def draw_enhanced_time_axis(self, painter, min_time, max_time, time_range, chart_width):
+        """Draw enhanced time axis with better formatting"""
+        painter.setPen(QPen(QColor(108, 117, 125), 2))
         
         # Draw axis line
-        y = self.top_margin - 10
-        painter.drawLine(self.left_margin, y, self.left_margin + chart_width, y)
+        y = self.top_margin - 15
+        painter.drawLine(int(self.left_margin), int(y), int(self.left_margin + chart_width), int(y))
         
-        # Draw time markers
-        num_markers = 10
+        # Draw time markers with better spacing
+        num_markers = min(10, max(5, int(chart_width / 100)))
+        font = painter.font()
+        font.setPointSize(9)
+        painter.setFont(font)
+        
         for i in range(num_markers + 1):
             x = self.left_margin + (i * chart_width / num_markers)
             time_ms = min_time + (i * time_range / num_markers)
             
-            # Draw tick
-            painter.drawLine(x, y - 3, x, y + 3)
+            # Draw tick (convert to int)
+            painter.drawLine(int(x), int(y - 5), int(x), int(y + 5))
             
-            # Draw time label
+            # Draw time label with better formatting
             if time_ms < 1000:
                 time_text = f"{time_ms:.0f}ms"
-            else:
+            elif time_ms < 60000:
                 time_text = f"{time_ms/1000:.1f}s"
+            else:
+                time_text = f"{time_ms/60000:.1f}m"
             
-            painter.drawText(x - 20, y - 15, 40, 12, Qt.AlignCenter, time_text)
+            painter.drawText(int(x - 25), int(y - 25), 50, 15, Qt.AlignCenter, time_text)
+    
+    def draw_grid_lines(self, painter, chart_width, chart_height):
+        """Draw subtle grid lines for better readability"""
+        painter.setPen(QPen(QColor(240, 240, 240), 1))
+        
+        # Vertical grid lines
+        num_lines = 10
+        for i in range(1, num_lines):
+            x = self.left_margin + (i * chart_width / num_lines)
+            painter.drawLine(int(x), int(self.top_margin), int(x), int(self.top_margin + chart_height))
+        
+        # Horizontal grid lines
+        for i in range(len(self.requests)):
+            y = self.top_margin + i * self.row_height
+            painter.drawLine(int(self.left_margin), int(y), int(self.left_margin + chart_width), int(y))
     
     def draw_request_bar(self, painter, request, y, min_time, time_range, chart_width):
         """Draw a single request bar with timing phases"""
@@ -155,25 +206,25 @@ class NetworkTimelineWidget(QWidget):
                     if phase_time > 0:
                         phase_width = (phase_time / total_timing) * total_width
                         
-                        # Draw phase bar
-                        painter.fillRect(current_x, bar_y, phase_width, bar_height, 
+                        # Draw phase bar (convert to int)
+                        painter.fillRect(int(current_x), int(bar_y), int(phase_width), int(bar_height), 
                                        QBrush(self.colors.get(phase_name, QColor(200, 200, 200))))
                         
-                        # Draw phase border
+                        # Draw phase border (convert to int)
                         painter.setPen(QPen(QColor(255, 255, 255), 1))
-                        painter.drawRect(current_x, bar_y, phase_width, bar_height)
+                        painter.drawRect(int(current_x), int(bar_y), int(phase_width), int(bar_height))
                         
                         current_x += phase_width
             else:
-                # No timing data, draw simple bar
+                # No timing data, draw simple bar (convert to int)
                 color = QColor(108, 117, 125) if end_time > start_time else QColor(255, 193, 7)
-                painter.fillRect(start_x, bar_y, total_width, bar_height, QBrush(color))
+                painter.fillRect(int(start_x), int(bar_y), int(total_width), int(bar_height), QBrush(color))
         else:
-            # No timing data, draw simple bar
+            # No timing data, draw simple bar (convert to int)
             color = QColor(108, 117, 125) if end_time > start_time else QColor(255, 193, 7)
-            painter.fillRect(start_x, bar_y, total_width, bar_height, QBrush(color))
+            painter.fillRect(int(start_x), int(bar_y), int(total_width), int(bar_height), QBrush(color))
         
-        # Draw status indicator
+        # Draw status indicator (convert to int)
         status = request.get('status', 0)
         if status:
             if status < 300:
@@ -183,7 +234,7 @@ class NetworkTimelineWidget(QWidget):
             else:
                 status_color = QColor(220, 53, 69)  # Red
             
-            painter.fillRect(start_x - 3, bar_y, 3, bar_height, QBrush(status_color))
+            painter.fillRect(int(start_x - 3), int(bar_y), 3, int(bar_height), QBrush(status_color))
     
     def draw_request_label(self, painter, request, y):
         """Draw request label on the left side"""
@@ -447,11 +498,6 @@ class TabManager:
                 csrf_cors_tester_action = QAction("🛡️ CSRF/CORS Visual Tester", self.main_window)
                 csrf_cors_tester_action.triggered.connect(lambda: self.test_csrf_cors(browser))
                 security_menu.addAction(csrf_cors_tester_action)
-                
-                # Add Network Request Timeline feature
-                network_timeline_action = QAction("📊 Network Request Timeline", self.main_window)
-                network_timeline_action.triggered.connect(lambda: self.show_network_timeline(browser))
-                menu.addAction(network_timeline_action)
                 
                 # Add SEO Analyzer feature
                 seo_analyzer_action = QAction("🔍 SEO Analyzer", self.main_window)
@@ -4669,26 +4715,7 @@ class TabManager:
             self.main_window.status_info.setText(f"❌ Failed to open Header Policy Simulator: {str(e)}")
             QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
     
-    def show_network_timeline(self, browser):
-        """Show network request timeline with waterfall visualization"""
-        try:
-            page = browser.page()
-            current_url = browser.url().toString()
-            
-            # Show initial status
-            self.main_window.status_info.setText("📊 Loading Network Request Timeline...")
-            
-            # Create and show the network timeline dialog
-            self.create_network_timeline_dialog(browser, current_url)
-            
-        except Exception as e:
-            # Show error in a message box for debugging
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.critical(self.main_window, "Network Timeline Error", f"Error: {str(e)}")
-            self.main_window.status_info.setText(f"❌ Network timeline error: {str(e)}")
-            QTimer.singleShot(3000, lambda: self.main_window.status_info.setText(""))
-    
-    def create_network_timeline_dialog(self, browser, page_url):
+    def scan_scripts(self, browser):
         """Create network timeline dialog with real-time waterfall visualization"""
         from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                                    QPushButton, QTabWidget, QWidget, QTreeWidget, 
