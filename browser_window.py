@@ -119,47 +119,13 @@ class MainWindow(QMainWindow):
         self.sidebar_widget.setVisible(self.sidebar_visible)  # Set initial visibility
         main_layout.addWidget(self.sidebar_widget)
         
-        # Create container for tabs and sidebar toggle
+        # Create container for tabs
         tabs_container = QWidget()
         tabs_container_layout = QVBoxLayout(tabs_container)
         tabs_container_layout.setContentsMargins(0, 0, 0, 0)
         tabs_container_layout.setSpacing(0)
         
-        # Create top bar with title only
-        self.top_bar = QWidget()
-        self.top_bar.setFixedHeight(32)
-        self.top_bar.setStyleSheet("""
-            QWidget {
-                background-color: #f8f9fa;
-                border-bottom: 1px solid #dee2e6;
-            }
-        """)
-        top_bar_layout = QHBoxLayout(self.top_bar)
-        top_bar_layout.setContentsMargins(8, 4, 8, 4)
-        top_bar_layout.setSpacing(8)
-        
-        # Add title label
-        self.title_label = QLabel("Browser Tabs")
-        self.title_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                font-weight: 600;
-                color: #495057;
-                padding-left: 4px;
-            }
-        """)
-        top_bar_layout.addWidget(self.title_label)
-        
-        # Add stretch to push everything to the left
-        top_bar_layout.addStretch()
-        
-        # Add top bar to container
-        tabs_container_layout.addWidget(self.top_bar)
-        
-        # Initially show top bar only in web mode (default mode)
-        self.top_bar.setVisible(True)
-        
-        # Create tabs
+        # Create tabs directly without top bar
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.tabs.tabBarDoubleClicked.connect(self.tab_open_doubleclick)
@@ -250,6 +216,7 @@ class MainWindow(QMainWindow):
     def setup_toolbar(self):
         """Setup navigation toolbar with icons"""
         self.navigation_toolbar = QToolBar("Navigation")
+        self.navigation_toolbar.setMovable(False)  # Disable toolbar dragging
         self.addToolBar(self.navigation_toolbar)
 
         # Home button with emoji icon
@@ -636,9 +603,6 @@ class MainWindow(QMainWindow):
         # Hide navigation toolbar
         self.navigation_toolbar.setVisible(False)
         
-        # Hide top bar (sidebar toggle and title) in non-web modes
-        self.top_bar.setVisible(False)
-        
         # Hide sidebar in non-web modes
         if self.sidebar_widget:
             self.sidebar_widget.setVisible(False)
@@ -665,9 +629,6 @@ class MainWindow(QMainWindow):
         
         # Hide navigation toolbar (home, reload, URL bar)
         self.navigation_toolbar.setVisible(False)
-        
-        # Hide top bar (sidebar toggle and title) in non-web modes
-        self.top_bar.setVisible(False)
         
         # Hide sidebar in non-web modes
         if self.sidebar_widget:
@@ -696,9 +657,6 @@ class MainWindow(QMainWindow):
         # Hide navigation toolbar
         self.navigation_toolbar.setVisible(False)
         
-        # Hide top bar (sidebar toggle and title) in non-web modes
-        self.top_bar.setVisible(False)
-        
         # Hide sidebar in non-web modes
         if self.sidebar_widget:
             self.sidebar_widget.setVisible(False)
@@ -726,9 +684,6 @@ class MainWindow(QMainWindow):
         # Hide navigation toolbar
         self.navigation_toolbar.setVisible(False)
         
-        # Hide top bar (sidebar toggle and title) in non-web modes
-        self.top_bar.setVisible(False)
-        
         # Hide sidebar in non-web modes
         if self.sidebar_widget:
             self.sidebar_widget.setVisible(False)
@@ -755,9 +710,6 @@ class MainWindow(QMainWindow):
         
         # Show navigation toolbar
         self.navigation_toolbar.setVisible(True)
-        
-        # Show top bar (sidebar toggle and title) in web mode
-        self.top_bar.setVisible(True)
         
         # Show sidebar only in web mode
         if self.sidebar_widget:
@@ -1698,13 +1650,6 @@ class MainWindow(QMainWindow):
             
         # Update action state
         self.sidebar_toggle_action.setChecked(self.sidebar_visible)
-        
-        # Update title label to reflect sidebar state
-        if hasattr(self, 'title_label'):
-            if self.sidebar_visible:
-                self.title_label.setText("Browser Tabs")
-            else:
-                self.title_label.setText("Browser Tabs (Sidebar Hidden)")
         
         # Update status
         status = "shown" if self.sidebar_visible else "hidden"
