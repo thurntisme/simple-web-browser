@@ -24,6 +24,8 @@ from speed_test_tool import SpeedTestDialog
 from command_line_tool import CommandLineWidget
 from json_formatter_tool import show_json_formatter
 from html_formatter_tool import show_html_formatter
+from css_formatter_tool import show_css_formatter
+from css_formatter_tool import show_css_formatter
 import ui_helpers
 import styles
 
@@ -438,6 +440,13 @@ class MainWindow(QMainWindow):
         html_formatter_action.setStatusTip("Format, validate, and analyze HTML code")
         html_formatter_action.triggered.connect(self.show_html_formatter)
         tools_menu.addAction(html_formatter_action)
+        
+        # CSS Formatter Tool action
+        css_formatter_action = QAction("🎨 CSS Formatter", self)
+        css_formatter_action.setShortcut("Ctrl+Shift+S")
+        css_formatter_action.setStatusTip("Format, validate, and analyze CSS code")
+        css_formatter_action.triggered.connect(self.show_css_formatter)
+        tools_menu.addAction(css_formatter_action)
         
         tools_menu.addSeparator()
         
@@ -971,6 +980,15 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.html_formatter_dialog.raise_()
             self.html_formatter_dialog.activateWindow()
+    
+    def show_css_formatter(self):
+        """Show CSS formatter dialog"""
+        if not hasattr(self, 'css_formatter_dialog') or self.css_formatter_dialog is None or not self.css_formatter_dialog.isVisible():
+            self.css_formatter_dialog = show_css_formatter(self)
+        else:
+            # Bring existing dialog to front
+            self.css_formatter_dialog.raise_()
+            self.css_formatter_dialog.activateWindow()
     
     def show_water_reminder(self):
         """Show water reminder dialog"""
