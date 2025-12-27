@@ -22,6 +22,7 @@ from curl_tool import CurlDialog
 from dns_tool import DNSDialog
 from speed_test_tool import SpeedTestDialog
 from command_line_tool import CommandLineWidget
+from json_formatter_tool import show_json_formatter
 import ui_helpers
 import styles
 
@@ -422,6 +423,13 @@ class MainWindow(QMainWindow):
         color_picker_action.setStatusTip("Advanced color picker and palette generator")
         color_picker_action.triggered.connect(self.show_color_picker_tool)
         tools_menu.addAction(color_picker_action)
+        
+        # JSON Formatter Tool action
+        json_formatter_action = QAction("🔧 JSON Formatter", self)
+        json_formatter_action.setShortcut("Ctrl+Shift+J")
+        json_formatter_action.setStatusTip("Format, validate, and analyze JSON data")
+        json_formatter_action.triggered.connect(self.show_json_formatter)
+        tools_menu.addAction(json_formatter_action)
         
         tools_menu.addSeparator()
         
@@ -937,6 +945,15 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.color_picker_dialog.raise_()
             self.color_picker_dialog.activateWindow()
+    
+    def show_json_formatter(self):
+        """Show JSON formatter dialog"""
+        if not hasattr(self, 'json_formatter_dialog') or self.json_formatter_dialog is None or not self.json_formatter_dialog.isVisible():
+            self.json_formatter_dialog = show_json_formatter(self)
+        else:
+            # Bring existing dialog to front
+            self.json_formatter_dialog.raise_()
+            self.json_formatter_dialog.activateWindow()
     
     def show_water_reminder(self):
         """Show water reminder dialog"""
