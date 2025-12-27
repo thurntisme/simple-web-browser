@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for all formatter tools (JSON, HTML, CSS).
+Test script for all formatter tools (JSON, HTML, CSS, JavaScript).
 """
 
 import sys
@@ -48,6 +48,15 @@ def test_all_formatters():
         assert hasattr(css_dialog, 'analyze_btn')
         print("✅ CSS Formatter - Working")
         
+        # Test JavaScript Formatter
+        print("\n⚡ Testing JavaScript Formatter...")
+        from js_formatter_tool import JsFormatterDialog
+        js_dialog = JsFormatterDialog()
+        assert hasattr(js_dialog, 'format_btn')
+        assert hasattr(js_dialog, 'minify_btn')
+        assert hasattr(js_dialog, 'analyze_btn')
+        print("✅ JavaScript Formatter - Working")
+        
         # Test Browser Integration
         print("\n🌐 Testing Browser Integration...")
         from browser_window import MainWindow
@@ -57,6 +66,7 @@ def test_all_formatters():
         assert hasattr(window, 'show_json_formatter')
         assert hasattr(window, 'show_html_formatter')
         assert hasattr(window, 'show_css_formatter')
+        assert hasattr(window, 'show_js_formatter')
         print("✅ Browser Integration - Working")
         
         print("\n🎉 All Formatter Tools Test Passed!")
@@ -64,12 +74,14 @@ def test_all_formatters():
         print("✅ JSON Formatter - Format, validate, analyze JSON data")
         print("✅ HTML Formatter - Format, validate, analyze HTML code")
         print("✅ CSS Formatter - Format, validate, analyze CSS styles")
+        print("✅ JavaScript Formatter - Format, validate, analyze JavaScript code")
         print("✅ Browser Integration - All tools accessible via Tools menu")
         
         print("\n🚀 Access Methods:")
         print("- 🔧 JSON Formatter: Tools → JSON Formatter (Ctrl+Shift+J)")
         print("- 🌐 HTML Formatter: Tools → HTML Formatter (Ctrl+Shift+H)")
         print("- 🎨 CSS Formatter: Tools → CSS Formatter (Ctrl+Shift+S)")
+        print("- ⚡ JavaScript Formatter: Tools → JavaScript Formatter (Ctrl+Shift+L)")
         
         print("\n💡 Features Available:")
         print("• Format & beautify code with proper indentation")
@@ -79,6 +91,12 @@ def test_all_formatters():
         print("• Copy results to clipboard")
         print("• Detailed error handling and validation")
         print("• Modern best practices recommendations")
+        print("• ES6+ feature detection (JavaScript)")
+        print("• HTML5 semantic analysis (HTML)")
+        print("• CSS3 feature detection (CSS)")
+        
+        print("\n🌟 Complete Frontend Development Suite!")
+        print("All major web technologies covered: JSON, HTML, CSS, JavaScript")
         
         return True
         

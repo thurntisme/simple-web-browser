@@ -25,6 +25,7 @@ from command_line_tool import CommandLineWidget
 from json_formatter_tool import show_json_formatter
 from html_formatter_tool import show_html_formatter
 from css_formatter_tool import show_css_formatter
+from js_formatter_tool import show_js_formatter
 from css_formatter_tool import show_css_formatter
 import ui_helpers
 import styles
@@ -447,6 +448,13 @@ class MainWindow(QMainWindow):
         css_formatter_action.setStatusTip("Format, validate, and analyze CSS code")
         css_formatter_action.triggered.connect(self.show_css_formatter)
         tools_menu.addAction(css_formatter_action)
+        
+        # JavaScript Formatter Tool action
+        js_formatter_action = QAction("⚡ JavaScript Formatter", self)
+        js_formatter_action.setShortcut("Ctrl+Shift+L")
+        js_formatter_action.setStatusTip("Format, validate, and analyze JavaScript code")
+        js_formatter_action.triggered.connect(self.show_js_formatter)
+        tools_menu.addAction(js_formatter_action)
         
         tools_menu.addSeparator()
         
@@ -989,6 +997,15 @@ class MainWindow(QMainWindow):
             # Bring existing dialog to front
             self.css_formatter_dialog.raise_()
             self.css_formatter_dialog.activateWindow()
+    
+    def show_js_formatter(self):
+        """Show JavaScript formatter dialog"""
+        if not hasattr(self, 'js_formatter_dialog') or self.js_formatter_dialog is None or not self.js_formatter_dialog.isVisible():
+            self.js_formatter_dialog = show_js_formatter(self)
+        else:
+            # Bring existing dialog to front
+            self.js_formatter_dialog.raise_()
+            self.js_formatter_dialog.activateWindow()
     
     def show_water_reminder(self):
         """Show water reminder dialog"""
